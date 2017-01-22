@@ -132,20 +132,26 @@ class SOAP_Value
      *                           - 'no_type_prefix': supress adding of the
      *                             namespace prefix
      */
-    function SOAP_Value($name = '', $type = false, $value = null,
+	public function __construct($name = '', $type = false, $value = null,
+								$attributes = array(), $options = array())
+	{
+		$this->nqn = new QName($name);
+		$this->name = $this->nqn->name;
+		$this->namespace = $this->nqn->namespace;
+		if ($type) {
+			$this->tqn = new QName($type);
+			$this->type = $this->tqn->name;
+			$this->type_namespace = $this->tqn->namespace;
+		}
+		$this->value = $value;
+		$this->attributes = $attributes;
+		$this->options = $options;
+	}
+
+    public function SOAP_Value($name = '', $type = false, $value = null,
                         $attributes = array(), $options = array())
     {
-        $this->nqn = new QName($name);
-        $this->name = $this->nqn->name;
-        $this->namespace = $this->nqn->namespace;
-        if ($type) {
-            $this->tqn = new QName($type);
-            $this->type = $this->tqn->name;
-            $this->type_namespace = $this->tqn->namespace;
-        }
-        $this->value = $value;
-        $this->attributes = $attributes;
-        $this->options = $options;
+		self::__construct($name, $type,$value, $attributes, $options);
     }
 
     /**
@@ -193,22 +199,28 @@ class SOAP_Header extends SOAP_Value
      * @param integer $mustunderstand  Zero or one.
      * @param mixed $attributes        Attributes.
      */
-    function SOAP_Header($name = '', $type, $value, $mustunderstand = 0,
+	public function __construct($name = '', $type, $value, $mustunderstand = 0,
+								$attributes = array())
+	{
+		if (!is_array($attributes)) {
+			$actor = $attributes;
+			$attributes = array();
+		}
+
+		parent::SOAP_Value($name, $type, $value, $attributes);
+
+		if (isset($actor)) {
+			$this->attributes[SOAP_BASE::SOAPENVPrefix().':actor'] = $actor;
+		} elseif (!isset($this->attributes[SOAP_BASE::SOAPENVPrefix().':actor'])) {
+			$this->attributes[SOAP_BASE::SOAPENVPrefix().':actor'] = 'http://schemas.xmlsoap.org/soap/actor/next';
+		}
+		$this->attributes[SOAP_BASE::SOAPENVPrefix().':mustUnderstand'] = (int)$mustunderstand;
+	}
+
+    public function SOAP_Header($name = '', $type, $value, $mustunderstand = 0,
                          $attributes = array())
     {
-        if (!is_array($attributes)) {
-            $actor = $attributes;
-            $attributes = array();
-        }
-
-        parent::SOAP_Value($name, $type, $value, $attributes);
-
-        if (isset($actor)) {
-            $this->attributes[SOAP_BASE::SOAPENVPrefix().':actor'] = $actor;
-        } elseif (!isset($this->attributes[SOAP_BASE::SOAPENVPrefix().':actor'])) {
-            $this->attributes[SOAP_BASE::SOAPENVPrefix().':actor'] = 'http://schemas.xmlsoap.org/soap/actor/next';
-        }
-        $this->attributes[SOAP_BASE::SOAPENVPrefix().':mustUnderstand'] = (int)$mustunderstand;
+		self::__construct($name, $type, $value, $mustunderstand, $attributes);
     }
 
 }
@@ -233,28 +245,34 @@ class SOAP_Attachment extends SOAP_Value
      * @param string $file      The attachment data.
      * @param array $attributes Attributes.
      */
-    function SOAP_Attachment($name = '', $type = 'application/octet-stream',
+	public function __construct($name = '', $type = 'application/octet-stream',
+								$filename, $file = null, $attributes = null)
+	{
+		parent::SOAP_Value($name, null, null);
+
+		$filedata = $file === null ? $this->_file2str($filename) : $file;
+		$filename = basename($filename);
+		if (PEAR::isError($filedata)) {
+			$this->options['attachment'] = $filedata;
+			return;
+		}
+
+		$cid = md5(uniqid(time()));
+
+		$this->attributes = $attributes;
+		$this->attributes['href'] = 'cid:' . $cid;
+
+		$this->options['attachment'] = array('body' => $filedata,
+											 'disposition' => $filename,
+											 'content_type' => $type,
+											 'encoding' => 'base64',
+											 'cid' => $cid);
+	}
+
+    public function SOAP_Attachment($name = '', $type = 'application/octet-stream',
                              $filename, $file = null, $attributes = null)
     {
-        parent::SOAP_Value($name, null, null);
-
-        $filedata = $file === null ? $this->_file2str($filename) : $file;
-        $filename = basename($filename);
-        if (PEAR::isError($filedata)) {
-            $this->options['attachment'] = $filedata;
-            return;
-        }
-
-        $cid = md5(uniqid(time()));
-
-        $this->attributes = $attributes;
-        $this->attributes['href'] = 'cid:' . $cid;
-
-        $this->options['attachment'] = array('body' => $filedata,
-                                             'disposition' => $filename,
-                                             'content_type' => $type,
-                                             'encoding' => 'base64',
-                                             'cid' => $cid);
+		self::__construct($name, $type, $filename, $file, $attributes);
     }
 
     /**

@@ -69,7 +69,7 @@ class Zend_Ldap_Converter
      */
     public static function hex32ToAsc($string)
     {
-        $string = preg_replace("/\\\([0-9A-Fa-f]{2})/e", "''.chr(hexdec('\\1')).''", $string);
+		$string = preg_replace_callback("/\\\([0-9A-Fa-f]{2})/", function($m){ return chr(hexdec($m[1])); }, $string);
         return $string;
     }
 

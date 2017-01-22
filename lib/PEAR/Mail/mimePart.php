@@ -129,99 +129,104 @@ class Mail_mimePart {
      *                  charset      - Character set to use
      * @access public
      */
-    function Mail_mimePart($body = '', $params = array())
+	public function __construct($body = '', $params = array())
+	{
+		if (!defined('MAIL_MIMEPART_CRLF')) {
+			define('MAIL_MIMEPART_CRLF', defined('MAIL_MIME_CRLF') ? MAIL_MIME_CRLF : "\r\n", TRUE);
+		}
+
+		$contentType = array();
+		$contentDisp = array();
+		foreach ($params as $key => $value) {
+			switch ($key) {
+				case 'content_type':
+					$contentType['type'] = $value;
+					//$headers['Content-Type'] = $value . (isset($charset) ? '; charset="' . $charset . '"' : '');
+					break;
+
+				case 'encoding':
+					$this->_encoding = $value;
+					$headers['Content-Transfer-Encoding'] = $value;
+					break;
+
+				case 'cid':
+					$headers['Content-ID'] = '<' . $value . '>';
+					break;
+
+				case 'disposition':
+					$contentDisp['disp'] = $value;
+					break;
+
+				case 'dfilename':
+					$contentDisp['filename'] = $value;
+					$contentType['name'] = $value;
+					break;
+
+				case 'description':
+					$headers['Content-Description'] = $value;
+					break;
+
+				case 'charset':
+					$contentType['charset'] = $value;
+					$contentDisp['charset'] = $value;
+					break;
+
+				case 'language':
+					$contentType['language'] = $value;
+					$contentDisp['language'] = $value;
+					break;
+
+				case 'location':
+					$headers['Content-Location'] = $value;
+					break;
+
+			}
+		}
+		if (isset($contentType['type'])) {
+			$headers['Content-Type'] = $contentType['type'];
+			if (isset($contentType['name'])) {
+				$headers['Content-Type'] .= ';' . MAIL_MIMEPART_CRLF;
+				$headers['Content-Type'] .= $this->_buildHeaderParam('name', $contentType['name'],
+					isset($contentType['charset']) ? $contentType['charset'] : 'US-ASCII',
+					isset($contentType['language']) ? $contentType['language'] : NULL);
+			} elseif (isset($contentType['charset'])) {
+				$headers['Content-Type'] .= "; charset=\"{$contentType['charset']}\"";
+			}
+		}
+
+
+		if (isset($contentDisp['disp'])) {
+			$headers['Content-Disposition'] = $contentDisp['disp'];
+			if (isset($contentDisp['filename'])) {
+				$headers['Content-Disposition'] .= ';' . MAIL_MIMEPART_CRLF;
+				$headers['Content-Disposition'] .= $this->_buildHeaderParam('filename', $contentDisp['filename'],
+					isset($contentDisp['charset']) ? $contentDisp['charset'] : 'US-ASCII',
+					isset($contentDisp['language']) ? $contentDisp['language'] : NULL);
+			}
+		}
+
+
+
+
+		// Default content-type
+		if (!isset($headers['Content-Type'])) {
+			$headers['Content-Type'] = 'text/plain';
+		}
+
+		//Default encoding
+		if (!isset($this->_encoding)) {
+			$this->_encoding = '7bit';
+		}
+
+		// Assign stuff to member variables
+		$this->_encoded  = array();
+		$this->_headers  = $headers;
+		$this->_body     = $body;
+	}
+
+    public function Mail_mimePart($body = '', $params = array())
     {
-        if (!defined('MAIL_MIMEPART_CRLF')) {
-            define('MAIL_MIMEPART_CRLF', defined('MAIL_MIME_CRLF') ? MAIL_MIME_CRLF : "\r\n", TRUE);
-        }
-
-        $contentType = array();
-        $contentDisp = array();
-        foreach ($params as $key => $value) {
-            switch ($key) {
-                case 'content_type':
-                    $contentType['type'] = $value;
-                    //$headers['Content-Type'] = $value . (isset($charset) ? '; charset="' . $charset . '"' : '');
-                    break;
-
-                case 'encoding':
-                    $this->_encoding = $value;
-                    $headers['Content-Transfer-Encoding'] = $value;
-                    break;
-
-                case 'cid':
-                    $headers['Content-ID'] = '<' . $value . '>';
-                    break;
-
-                case 'disposition':
-                    $contentDisp['disp'] = $value;
-                    break;
-
-                case 'dfilename':
-                    $contentDisp['filename'] = $value;
-                    $contentType['name'] = $value;
-                    break;
-
-                case 'description':
-                    $headers['Content-Description'] = $value;
-                    break;
-
-                case 'charset':
-                    $contentType['charset'] = $value;
-                    $contentDisp['charset'] = $value;
-                    break;
-
-                case 'language':
-                    $contentType['language'] = $value;
-                    $contentDisp['language'] = $value;
-                    break;
-
-                case 'location':
-                    $headers['Content-Location'] = $value;
-                    break;
-
-            }
-        }
-        if (isset($contentType['type'])) {
-            $headers['Content-Type'] = $contentType['type'];
-            if (isset($contentType['name'])) {
-                $headers['Content-Type'] .= ';' . MAIL_MIMEPART_CRLF;
-                $headers['Content-Type'] .= $this->_buildHeaderParam('name', $contentType['name'], 
-                                                isset($contentType['charset']) ? $contentType['charset'] : 'US-ASCII', 
-                                                isset($contentType['language']) ? $contentType['language'] : NULL);
-            } elseif (isset($contentType['charset'])) {
-                $headers['Content-Type'] .= "; charset=\"{$contentType['charset']}\"";
-            }
-        }
-
-
-        if (isset($contentDisp['disp'])) {
-            $headers['Content-Disposition'] = $contentDisp['disp'];
-            if (isset($contentDisp['filename'])) {
-                $headers['Content-Disposition'] .= ';' . MAIL_MIMEPART_CRLF;
-                $headers['Content-Disposition'] .= $this->_buildHeaderParam('filename', $contentDisp['filename'], 
-                                                isset($contentDisp['charset']) ? $contentDisp['charset'] : 'US-ASCII', 
-                                                isset($contentDisp['language']) ? $contentDisp['language'] : NULL);
-            }
-        }
-        
-        
-        
-        
-        // Default content-type
-        if (!isset($headers['Content-Type'])) {
-            $headers['Content-Type'] = 'text/plain';
-        }
-
-        //Default encoding
-        if (!isset($this->_encoding)) {
-            $this->_encoding = '7bit';
-        }
-
-        // Assign stuff to member variables
-        $this->_encoded  = array();
-        $this->_headers  = $headers;
-        $this->_body     = $body;
+		self::__construct($body, $params);
     }
 
     /**
@@ -405,7 +410,7 @@ class Mail_mimePart {
             $search  = array('%',   ' ',   "\t");
             $replace = array('%25', '%20', '%09');
             $encValue = str_replace($search, $replace, $value);
-            $encValue = preg_replace('#([\x80-\xFF])#e', '"%" . strtoupper(dechex(ord("\1")))', $encValue);
+			$encValue = preg_replace_callback('#([\x80-\xFF])#', function($m){ return "%".strtoupper(dechex(ord($m[1]))); }, $encValue);
             $value = "$charset'$language'$encValue";
             $secondAsterisk = '*';
         }

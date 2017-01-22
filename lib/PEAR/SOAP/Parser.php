@@ -69,46 +69,52 @@ class SOAP_Parser extends SOAP_Base
      * @param string $encoding    Character set encoding, defaults to 'UTF-8'.
      * @param array $attachments  List of attachments.
      */
-    function SOAP_Parser($xml, $encoding = SOAP_DEFAULT_ENCODING,
+	public function __construct($xml, $encoding = SOAP_DEFAULT_ENCODING,
+								$attachments = null)
+	{
+		parent::SOAP_Base('Parser');
+		$this->_setSchemaVersion(SOAP_XML_SCHEMA_VERSION);
+
+		$this->attachments = $attachments;
+
+		// Check the XML tag for encoding.
+		if (preg_match('/<\?xml[^>]+encoding\s*?=\s*?(\'([^\']*)\'|"([^"]*)")[^>]*?[\?]>/', $xml, $m)) {
+			$encoding = strtoupper($m[2] ? $m[2] : $m[3]);
+		}
+
+		// Determine where in the message we are (envelope, header, body,
+		// method). Check whether content has been read.
+		if (!empty($xml)) {
+			// Prepare the XML parser.
+			$parser = xml_parser_create($encoding);
+			xml_parser_set_option($parser, XML_OPTION_CASE_FOLDING, 0);
+			xml_set_object($parser, $this);
+			xml_set_element_handler($parser, '_startElement', '_endElement');
+			xml_set_character_data_handler($parser, '_characterData');
+
+			// Some lame SOAP implementations add nul bytes at the end of the
+			// SOAP stream, and expat chokes on that.
+			if ($xml[strlen($xml) - 1] == 0) {
+				$xml = trim($xml);
+			}
+
+			// Parse the XML file.
+			if (!xml_parse($parser, $xml, true)) {
+				$err = sprintf('XML error on line %d col %d byte %d %s',
+					xml_get_current_line_number($parser),
+					xml_get_current_column_number($parser),
+					xml_get_current_byte_index($parser),
+					xml_error_string(xml_get_error_code($parser)));
+				$this->_raiseSoapFault($err, htmlspecialchars($xml));
+			}
+			xml_parser_free($parser);
+		}
+	}
+
+    public function SOAP_Parser($xml, $encoding = SOAP_DEFAULT_ENCODING,
                          $attachments = null)
     {
-        parent::SOAP_Base('Parser');
-        $this->_setSchemaVersion(SOAP_XML_SCHEMA_VERSION);
-
-        $this->attachments = $attachments;
-
-        // Check the XML tag for encoding.
-        if (preg_match('/<\?xml[^>]+encoding\s*?=\s*?(\'([^\']*)\'|"([^"]*)")[^>]*?[\?]>/', $xml, $m)) {
-            $encoding = strtoupper($m[2] ? $m[2] : $m[3]);
-        }
-
-        // Determine where in the message we are (envelope, header, body,
-        // method). Check whether content has been read.
-        if (!empty($xml)) {
-            // Prepare the XML parser.
-            $parser = xml_parser_create($encoding);
-            xml_parser_set_option($parser, XML_OPTION_CASE_FOLDING, 0);
-            xml_set_object($parser, $this);
-            xml_set_element_handler($parser, '_startElement', '_endElement');
-            xml_set_character_data_handler($parser, '_characterData');
-
-            // Some lame SOAP implementations add nul bytes at the end of the
-            // SOAP stream, and expat chokes on that.
-            if ($xml[strlen($xml) - 1] == 0) {
-                $xml = trim($xml);
-            }
-
-            // Parse the XML file.
-            if (!xml_parse($parser, $xml, true)) {
-                $err = sprintf('XML error on line %d col %d byte %d %s',
-                               xml_get_current_line_number($parser),
-                               xml_get_current_column_number($parser),
-                               xml_get_current_byte_index($parser),
-                               xml_error_string(xml_get_error_code($parser)));
-                $this->_raiseSoapFault($err, htmlspecialchars($xml));
-            }
-            xml_parser_free($parser);
-        }
+		self::__construct($xml, $encoding, $attachments);
     }
 
     /**

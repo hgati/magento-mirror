@@ -574,151 +574,156 @@ class Net_SSH2 {
      * @return Net_SSH2
      * @access public
      */
-    function Net_SSH2($host, $port = 22, $timeout = 10)
+	public function __construct($host, $port = 22, $timeout = 10)
+	{
+		$this->message_numbers = array(
+			1 => 'NET_SSH2_MSG_DISCONNECT',
+			2 => 'NET_SSH2_MSG_IGNORE',
+			3 => 'NET_SSH2_MSG_UNIMPLEMENTED',
+			4 => 'NET_SSH2_MSG_DEBUG',
+			5 => 'NET_SSH2_MSG_SERVICE_REQUEST',
+			6 => 'NET_SSH2_MSG_SERVICE_ACCEPT',
+			20 => 'NET_SSH2_MSG_KEXINIT',
+			21 => 'NET_SSH2_MSG_NEWKEYS',
+			30 => 'NET_SSH2_MSG_KEXDH_INIT',
+			31 => 'NET_SSH2_MSG_KEXDH_REPLY',
+			50 => 'NET_SSH2_MSG_USERAUTH_REQUEST',
+			51 => 'NET_SSH2_MSG_USERAUTH_FAILURE',
+			52 => 'NET_SSH2_MSG_USERAUTH_SUCCESS',
+			53 => 'NET_SSH2_MSG_USERAUTH_BANNER',
+
+			80 => 'NET_SSH2_MSG_GLOBAL_REQUEST',
+			81 => 'NET_SSH2_MSG_REQUEST_SUCCESS',
+			82 => 'NET_SSH2_MSG_REQUEST_FAILURE',
+			90 => 'NET_SSH2_MSG_CHANNEL_OPEN',
+			91 => 'NET_SSH2_MSG_CHANNEL_OPEN_CONFIRMATION',
+			92 => 'NET_SSH2_MSG_CHANNEL_OPEN_FAILURE',
+			93 => 'NET_SSH2_MSG_CHANNEL_WINDOW_ADJUST',
+			94 => 'NET_SSH2_MSG_CHANNEL_DATA',
+			95 => 'NET_SSH2_MSG_CHANNEL_EXTENDED_DATA',
+			96 => 'NET_SSH2_MSG_CHANNEL_EOF',
+			97 => 'NET_SSH2_MSG_CHANNEL_CLOSE',
+			98 => 'NET_SSH2_MSG_CHANNEL_REQUEST',
+			99 => 'NET_SSH2_MSG_CHANNEL_SUCCESS',
+			100 => 'NET_SSH2_MSG_CHANNEL_FAILURE'
+		);
+		$this->disconnect_reasons = array(
+			1 => 'NET_SSH2_DISCONNECT_HOST_NOT_ALLOWED_TO_CONNECT',
+			2 => 'NET_SSH2_DISCONNECT_PROTOCOL_ERROR',
+			3 => 'NET_SSH2_DISCONNECT_KEY_EXCHANGE_FAILED',
+			4 => 'NET_SSH2_DISCONNECT_RESERVED',
+			5 => 'NET_SSH2_DISCONNECT_MAC_ERROR',
+			6 => 'NET_SSH2_DISCONNECT_COMPRESSION_ERROR',
+			7 => 'NET_SSH2_DISCONNECT_SERVICE_NOT_AVAILABLE',
+			8 => 'NET_SSH2_DISCONNECT_PROTOCOL_VERSION_NOT_SUPPORTED',
+			9 => 'NET_SSH2_DISCONNECT_HOST_KEY_NOT_VERIFIABLE',
+			10 => 'NET_SSH2_DISCONNECT_CONNECTION_LOST',
+			11 => 'NET_SSH2_DISCONNECT_BY_APPLICATION',
+			12 => 'NET_SSH2_DISCONNECT_TOO_MANY_CONNECTIONS',
+			13 => 'NET_SSH2_DISCONNECT_AUTH_CANCELLED_BY_USER',
+			14 => 'NET_SSH2_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE',
+			15 => 'NET_SSH2_DISCONNECT_ILLEGAL_USER_NAME'
+		);
+		$this->channel_open_failure_reasons = array(
+			1 => 'NET_SSH2_OPEN_ADMINISTRATIVELY_PROHIBITED'
+		);
+		$this->terminal_modes = array(
+			0 => 'NET_SSH2_TTY_OP_END'
+		);
+		$this->channel_extended_data_type_codes = array(
+			1 => 'NET_SSH2_EXTENDED_DATA_STDERR'
+		);
+
+		$this->_define_array(
+			$this->message_numbers,
+			$this->disconnect_reasons,
+			$this->channel_open_failure_reasons,
+			$this->terminal_modes,
+			$this->channel_extended_data_type_codes,
+			array(60 => 'NET_SSH2_MSG_USERAUTH_PASSWD_CHANGEREQ'),
+			array(60 => 'NET_SSH2_MSG_USERAUTH_PK_OK')
+		);
+
+		$this->fsock = @fsockopen($host, $port, $errno, $errstr, $timeout);
+		if (!$this->fsock) {
+			user_error(rtrim("Cannot connect to $host. Error $errno. $errstr"), E_USER_NOTICE);
+			return;
+		}
+
+		/* According to the SSH2 specs,
+
+		  "The server MAY send other lines of data before sending the version
+		   string.  Each line SHOULD be terminated by a Carriage Return and Line
+		   Feed.  Such lines MUST NOT begin with "SSH-", and SHOULD be encoded
+		   in ISO-10646 UTF-8 [RFC3629] (language is not specified).  Clients
+		   MUST be able to process such lines." */
+		$temp = '';
+		$extra = '';
+		while (!feof($this->fsock) && !preg_match('#^SSH-(\d\.\d+)#', $temp, $matches)) {
+			if (substr($temp, -2) == "\r\n") {
+				$extra.= $temp;
+				$temp = '';
+			}
+			$temp.= fgets($this->fsock, 255);
+		}
+
+		$ext = array();
+		if (extension_loaded('mcrypt')) {
+			$ext[] = 'mcrypt';
+		}
+		if (extension_loaded('gmp')) {
+			$ext[] = 'gmp';
+		} else if (extension_loaded('bcmath')) {
+			$ext[] = 'bcmath';
+		}
+
+		if (!empty($ext)) {
+			$this->identifier.= ' (' . implode(', ', $ext) . ')';
+		}
+
+		if (defined('NET_SSH2_LOGGING')) {
+			$this->message_number_log[] = '<-';
+			$this->message_number_log[] = '->';
+
+			if (NET_SSH2_LOGGING == NET_SSH2_LOG_COMPLEX) {
+				$this->message_log[] = $temp;
+				$this->message_log[] = $this->identifier . "\r\n";
+			}
+		}
+
+		$this->server_identifier = trim($temp, "\r\n");
+		if (!empty($extra)) {
+			$this->errors[] = utf8_decode($extra);
+		}
+
+		if ($matches[1] != '1.99' && $matches[1] != '2.0') {
+			user_error("Cannot connect to SSH $matches[1] servers", E_USER_NOTICE);
+			return;
+		}
+
+		fputs($this->fsock, $this->identifier . "\r\n");
+
+		$response = $this->_get_binary_packet();
+		if ($response === false) {
+			user_error('Connection closed by server', E_USER_NOTICE);
+			return;
+		}
+
+		if (ord($response[0]) != NET_SSH2_MSG_KEXINIT) {
+			user_error('Expected SSH_MSG_KEXINIT', E_USER_NOTICE);
+			return;
+		}
+
+		if (!$this->_key_exchange($response)) {
+			return;
+		}
+
+		$this->bitmap = NET_SSH2_MASK_CONSTRUCTOR;
+	}
+
+    public function Net_SSH2($host, $port = 22, $timeout = 10)
     {
-        $this->message_numbers = array(
-            1 => 'NET_SSH2_MSG_DISCONNECT',
-            2 => 'NET_SSH2_MSG_IGNORE',
-            3 => 'NET_SSH2_MSG_UNIMPLEMENTED',
-            4 => 'NET_SSH2_MSG_DEBUG',
-            5 => 'NET_SSH2_MSG_SERVICE_REQUEST',
-            6 => 'NET_SSH2_MSG_SERVICE_ACCEPT',
-            20 => 'NET_SSH2_MSG_KEXINIT',
-            21 => 'NET_SSH2_MSG_NEWKEYS',
-            30 => 'NET_SSH2_MSG_KEXDH_INIT',
-            31 => 'NET_SSH2_MSG_KEXDH_REPLY',
-            50 => 'NET_SSH2_MSG_USERAUTH_REQUEST',
-            51 => 'NET_SSH2_MSG_USERAUTH_FAILURE',
-            52 => 'NET_SSH2_MSG_USERAUTH_SUCCESS',
-            53 => 'NET_SSH2_MSG_USERAUTH_BANNER',
-
-            80 => 'NET_SSH2_MSG_GLOBAL_REQUEST',
-            81 => 'NET_SSH2_MSG_REQUEST_SUCCESS',
-            82 => 'NET_SSH2_MSG_REQUEST_FAILURE',
-            90 => 'NET_SSH2_MSG_CHANNEL_OPEN',
-            91 => 'NET_SSH2_MSG_CHANNEL_OPEN_CONFIRMATION',
-            92 => 'NET_SSH2_MSG_CHANNEL_OPEN_FAILURE',
-            93 => 'NET_SSH2_MSG_CHANNEL_WINDOW_ADJUST',
-            94 => 'NET_SSH2_MSG_CHANNEL_DATA',
-            95 => 'NET_SSH2_MSG_CHANNEL_EXTENDED_DATA',
-            96 => 'NET_SSH2_MSG_CHANNEL_EOF',
-            97 => 'NET_SSH2_MSG_CHANNEL_CLOSE',
-            98 => 'NET_SSH2_MSG_CHANNEL_REQUEST',
-            99 => 'NET_SSH2_MSG_CHANNEL_SUCCESS',
-            100 => 'NET_SSH2_MSG_CHANNEL_FAILURE'
-        );
-        $this->disconnect_reasons = array(
-            1 => 'NET_SSH2_DISCONNECT_HOST_NOT_ALLOWED_TO_CONNECT',
-            2 => 'NET_SSH2_DISCONNECT_PROTOCOL_ERROR',
-            3 => 'NET_SSH2_DISCONNECT_KEY_EXCHANGE_FAILED',
-            4 => 'NET_SSH2_DISCONNECT_RESERVED',
-            5 => 'NET_SSH2_DISCONNECT_MAC_ERROR',
-            6 => 'NET_SSH2_DISCONNECT_COMPRESSION_ERROR',
-            7 => 'NET_SSH2_DISCONNECT_SERVICE_NOT_AVAILABLE',
-            8 => 'NET_SSH2_DISCONNECT_PROTOCOL_VERSION_NOT_SUPPORTED',
-            9 => 'NET_SSH2_DISCONNECT_HOST_KEY_NOT_VERIFIABLE',
-            10 => 'NET_SSH2_DISCONNECT_CONNECTION_LOST',
-            11 => 'NET_SSH2_DISCONNECT_BY_APPLICATION',
-            12 => 'NET_SSH2_DISCONNECT_TOO_MANY_CONNECTIONS',
-            13 => 'NET_SSH2_DISCONNECT_AUTH_CANCELLED_BY_USER',
-            14 => 'NET_SSH2_DISCONNECT_NO_MORE_AUTH_METHODS_AVAILABLE',
-            15 => 'NET_SSH2_DISCONNECT_ILLEGAL_USER_NAME'
-        );
-        $this->channel_open_failure_reasons = array(
-            1 => 'NET_SSH2_OPEN_ADMINISTRATIVELY_PROHIBITED'
-        );
-        $this->terminal_modes = array(
-            0 => 'NET_SSH2_TTY_OP_END'
-        );
-        $this->channel_extended_data_type_codes = array(
-            1 => 'NET_SSH2_EXTENDED_DATA_STDERR'
-        );
-
-        $this->_define_array(
-            $this->message_numbers,
-            $this->disconnect_reasons,
-            $this->channel_open_failure_reasons,
-            $this->terminal_modes,
-            $this->channel_extended_data_type_codes,
-            array(60 => 'NET_SSH2_MSG_USERAUTH_PASSWD_CHANGEREQ'),
-            array(60 => 'NET_SSH2_MSG_USERAUTH_PK_OK')
-        );
-
-        $this->fsock = @fsockopen($host, $port, $errno, $errstr, $timeout);
-        if (!$this->fsock) {
-            user_error(rtrim("Cannot connect to $host. Error $errno. $errstr"), E_USER_NOTICE);
-            return;
-        }
-
-        /* According to the SSH2 specs,
-
-          "The server MAY send other lines of data before sending the version
-           string.  Each line SHOULD be terminated by a Carriage Return and Line
-           Feed.  Such lines MUST NOT begin with "SSH-", and SHOULD be encoded
-           in ISO-10646 UTF-8 [RFC3629] (language is not specified).  Clients
-           MUST be able to process such lines." */
-        $temp = '';
-        $extra = '';
-        while (!feof($this->fsock) && !preg_match('#^SSH-(\d\.\d+)#', $temp, $matches)) {
-            if (substr($temp, -2) == "\r\n") {
-                $extra.= $temp;
-                $temp = '';
-            }
-            $temp.= fgets($this->fsock, 255);
-        }
-
-        $ext = array();
-        if (extension_loaded('mcrypt')) {
-            $ext[] = 'mcrypt';
-        }
-        if (extension_loaded('gmp')) {
-            $ext[] = 'gmp';
-        } else if (extension_loaded('bcmath')) {
-            $ext[] = 'bcmath';
-        }
-
-        if (!empty($ext)) {
-            $this->identifier.= ' (' . implode(', ', $ext) . ')';
-        }
-
-        if (defined('NET_SSH2_LOGGING')) {
-            $this->message_number_log[] = '<-';
-            $this->message_number_log[] = '->';
-
-            if (NET_SSH2_LOGGING == NET_SSH2_LOG_COMPLEX) {
-                $this->message_log[] = $temp;
-                $this->message_log[] = $this->identifier . "\r\n";
-            }
-        }
-
-        $this->server_identifier = trim($temp, "\r\n");
-        if (!empty($extra)) {
-            $this->errors[] = utf8_decode($extra);
-        }
-
-        if ($matches[1] != '1.99' && $matches[1] != '2.0') {
-            user_error("Cannot connect to SSH $matches[1] servers", E_USER_NOTICE);
-            return;
-        }
-
-        fputs($this->fsock, $this->identifier . "\r\n");
-
-        $response = $this->_get_binary_packet();
-        if ($response === false) {
-            user_error('Connection closed by server', E_USER_NOTICE);
-            return;
-        }
-
-        if (ord($response[0]) != NET_SSH2_MSG_KEXINIT) {
-            user_error('Expected SSH_MSG_KEXINIT', E_USER_NOTICE);
-            return;
-        }
-
-        if (!$this->_key_exchange($response)) {
-            return;
-        }
-
-        $this->bitmap = NET_SSH2_MASK_CONSTRUCTOR;
+		self::__construct($host, $port, $timeout);
     }
 
     /**
@@ -2015,9 +2020,10 @@ class Net_SSH2 {
                 }
                 $fragment = $this->_string_shift($current_log, $short_width);
                 $hex = substr(
-                           preg_replace(
-                               '#(.)#es',
-                               '"' . $boundary . '" . str_pad(dechex(ord(substr("\\1", -1))), 2, "0", STR_PAD_LEFT)',
+                           preg_replace_callback(
+                               '#(.)#s',
+						   		function($m) use($boundary){ return "$boundary" . str_pad(dechex(ord(substr($m[1], -1))), 2, "0", STR_PAD_LEFT); },
+                               //'"' . $boundary . '" . str_pad(dechex(ord(substr("\\1", -1))), 2, "0", STR_PAD_LEFT)',
                                $fragment),
                            strlen($boundary)
                        );

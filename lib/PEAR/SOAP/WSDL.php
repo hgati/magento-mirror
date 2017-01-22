@@ -160,28 +160,37 @@ class SOAP_WSDL extends SOAP_Base
      *
      * @access public
      */
-    function SOAP_WSDL($wsdl_uri    = false,
+	public function __construct($wsdl_uri    = false,
+								$proxy       = array(),
+								$cacheUse    = false,
+								$cacheMaxAge = WSDL_CACHE_MAX_AGE,
+								$docs        = false)
+	{
+		parent::SOAP_Base('WSDL');
+		$this->uri         = $wsdl_uri;
+		$this->proxy       = $proxy;
+		$this->cacheUse    = !empty($cacheUse);
+		$this->cacheMaxAge = $cacheMaxAge;
+		$this->docs        = $docs;
+		if (is_string($cacheUse)) {
+			$this->cacheDir = $cacheUse;
+		}
+
+		if ($wsdl_uri) {
+			if (!PEAR::isError($this->parseURL($wsdl_uri))) {
+				reset($this->services);
+				$this->service = key($this->services);
+			}
+		}
+	}
+
+    public function SOAP_WSDL($wsdl_uri    = false,
                        $proxy       = array(),
                        $cacheUse    = false,
                        $cacheMaxAge = WSDL_CACHE_MAX_AGE,
                        $docs        = false)
     {
-        parent::SOAP_Base('WSDL');
-        $this->uri         = $wsdl_uri;
-        $this->proxy       = $proxy;
-        $this->cacheUse    = !empty($cacheUse);
-        $this->cacheMaxAge = $cacheMaxAge;
-        $this->docs        = $docs;
-        if (is_string($cacheUse)) {
-            $this->cacheDir = $cacheUse;
-        }
-
-        if ($wsdl_uri) {
-            if (!PEAR::isError($this->parseURL($wsdl_uri))) {
-                reset($this->services);
-                $this->service = key($this->services);
-            }
-        }
+		self::__construct($wsdl_uri, $proxy, $cacheUse, $cacheMaxAge, $docs);
     }
 
     /**
@@ -938,7 +947,7 @@ class SOAP_WSDL extends SOAP_Base
     {
         static $trail = array();
 
-        $arrayType = ereg_replace('\[\]$', '', $arrayType);
+		$arrayType = preg_replace('/\[\]$/', '', $arrayType);
 
         // Protect against circular references XXX We really need to remove
         // trail from this altogether (it's very inefficient and in the wrong
@@ -990,14 +999,21 @@ class SOAP_WSDL_Cache extends SOAP_Base
      * @param boolean $cashUse      Use caching?
      * @param integer $cacheMaxAge  Cache maximum lifetime (in seconds)
      */
-    function SOAP_WSDL_Cache($cacheUse = false,
+	public function __construct($cacheUse = false,
+								$cacheMaxAge = WSDL_CACHE_MAX_AGE,
+								$cacheDir = null)
+	{
+		parent::SOAP_Base('WSDLCACHE');
+		$this->_cacheUse = $cacheUse;
+		$this->_cacheDir = $cacheDir;
+		$this->_cacheMaxAge = $cacheMaxAge;
+	}
+
+    public function SOAP_WSDL_Cache($cacheUse = false,
                              $cacheMaxAge = WSDL_CACHE_MAX_AGE,
                              $cacheDir = null)
     {
-        parent::SOAP_Base('WSDLCACHE');
-        $this->_cacheUse = $cacheUse;
-        $this->_cacheDir = $cacheDir;
-        $this->_cacheMaxAge = $cacheMaxAge;
+		self::__construct($cacheUse, $cacheMaxAge, $cacheDir);
     }
 
     /**
@@ -1153,16 +1169,21 @@ class SOAP_WSDL_Parser extends SOAP_Base
     /**
      * Constructor.
      */
-    function SOAP_WSDL_Parser($uri, &$wsdl, $docs = false)
+	public function __construct($uri, &$wsdl, $docs = false)
+	{
+		parent::SOAP_Base('WSDLPARSER');
+		$this->cache = new SOAP_WSDL_Cache($wsdl->cacheUse,
+			$wsdl->cacheMaxAge,
+			$wsdl->cacheDir);
+		$this->uri = $uri;
+		$this->wsdl = &$wsdl;
+		$this->docs = $docs;
+		$this->parse($uri);
+	}
+
+    public function SOAP_WSDL_Parser($uri, &$wsdl, $docs = false)
     {
-        parent::SOAP_Base('WSDLPARSER');
-        $this->cache = new SOAP_WSDL_Cache($wsdl->cacheUse,
-                                            $wsdl->cacheMaxAge,
-                                            $wsdl->cacheDir);
-        $this->uri = $uri;
-        $this->wsdl = &$wsdl;
-        $this->docs = $docs;
-        $this->parse($uri);
+		self::__construct($uri, &$wsdl, $docs);
     }
 
     function parse($uri)
@@ -1984,34 +2005,40 @@ class SOAP_WSDL_ObjectParser extends SOAP_Base
      * @param string $service_desc     Optional description of the WSDL
      *                                 <service>.
      */
-    function SOAP_WSDL_ObjectParser($objects, &$wsdl, $targetNamespace,
+	public function __construct($objects, &$wsdl, $targetNamespace,
+								$service_name, $service_desc = '')
+	{
+		parent::SOAP_Base('WSDLOBJECTPARSER');
+
+		$this->wsdl = &$wsdl;
+
+		// Set up the SOAP_WSDL object
+		$this->_initialise($service_name);
+
+		// Parse each web service object
+		$wsdl_ref = is_array($objects) ? $objects : array($objects);
+
+		foreach ($wsdl_ref as $ref_item) {
+			if (!is_object($ref_item)) {
+				$this->_raiseSoapFault('Invalid web service object passed to object parser');
+				continue;
+			}
+
+			if (!$this->_parse($ref_item, $targetNamespace, $service_name)) {
+				break;
+			}
+		}
+
+		// Build bindings from abstract data.
+		if ($this->fault == null) {
+			$this->_generateBindingsAndServices($targetNamespace, $service_name, $service_desc);
+		}
+	}
+
+    public function SOAP_WSDL_ObjectParser($objects, &$wsdl, $targetNamespace,
                                     $service_name, $service_desc = '')
     {
-        parent::SOAP_Base('WSDLOBJECTPARSER');
-
-        $this->wsdl = &$wsdl;
-
-        // Set up the SOAP_WSDL object
-        $this->_initialise($service_name);
-
-        // Parse each web service object
-        $wsdl_ref = is_array($objects) ? $objects : array($objects);
-
-        foreach ($wsdl_ref as $ref_item) {
-            if (!is_object($ref_item)) {
-                $this->_raiseSoapFault('Invalid web service object passed to object parser');
-                continue;
-            }
-
-            if (!$this->_parse($ref_item, $targetNamespace, $service_name)) {
-                break;
-            }
-        }
-
-        // Build bindings from abstract data.
-        if ($this->fault == null) {
-            $this->_generateBindingsAndServices($targetNamespace, $service_name, $service_desc);
-        }
+		self::__construct($objects, &$wsdl, $targetNamespace, $service_name, $service_desc);
     }
 
     /**

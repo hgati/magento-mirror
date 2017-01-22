@@ -168,31 +168,36 @@ class Crypt_RC4 {
      * @return Crypt_RC4
      * @access public
      */
-    function Crypt_RC4()
-    {
-        if ( !defined('CRYPT_RC4_MODE') ) {
-            switch (true) {
-                case extension_loaded('mcrypt') && (defined('MCRYPT_ARCFOUR') || defined('MCRYPT_RC4')):
-                    // i'd check to see if rc4 was supported, by doing in_array('arcfour', mcrypt_list_algorithms('')),
-                    // but since that can be changed after the object has been created, there doesn't seem to be
-                    // a lot of point...
-                    define('CRYPT_RC4_MODE', CRYPT_RC4_MODE_MCRYPT);
-                    break;
-                default:
-                    define('CRYPT_RC4_MODE', CRYPT_RC4_MODE_INTERNAL);
-            }
-        }
+	public function __construct()
+	{
+		if ( !defined('CRYPT_RC4_MODE') ) {
+			switch (true) {
+				case extension_loaded('mcrypt') && (defined('MCRYPT_ARCFOUR') || defined('MCRYPT_RC4')):
+					// i'd check to see if rc4 was supported, by doing in_array('arcfour', mcrypt_list_algorithms('')),
+					// but since that can be changed after the object has been created, there doesn't seem to be
+					// a lot of point...
+					define('CRYPT_RC4_MODE', CRYPT_RC4_MODE_MCRYPT);
+					break;
+				default:
+					define('CRYPT_RC4_MODE', CRYPT_RC4_MODE_INTERNAL);
+			}
+		}
 
-        switch ( CRYPT_RC4_MODE ) {
-            case CRYPT_RC4_MODE_MCRYPT:
-                switch (true) {
-                    case defined('MCRYPT_ARCFOUR'):
-                        $this->mode = MCRYPT_ARCFOUR;
-                        break;
-                    case defined('MCRYPT_RC4');
-                        $this->mode = MCRYPT_RC4;
-                }
-        }
+		switch ( CRYPT_RC4_MODE ) {
+			case CRYPT_RC4_MODE_MCRYPT:
+				switch (true) {
+					case defined('MCRYPT_ARCFOUR'):
+						$this->mode = MCRYPT_ARCFOUR;
+						break;
+					case defined('MCRYPT_RC4');
+						$this->mode = MCRYPT_RC4;
+				}
+		}
+	}
+
+    public function Crypt_RC4()
+    {
+		self::__construct();
     }
 
     /**

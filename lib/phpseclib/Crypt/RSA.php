@@ -212,196 +212,201 @@ define('CRYPT_RSA_PUBLIC_FORMAT_OPENSSH', 3);
  * @package Crypt_RSA
  */
 class Crypt_RSA {
-    /**
-     * Precomputed Zero
-     *
-     * @var Array
-     * @access private
-     */
-    var $zero;
+	/**
+	 * Precomputed Zero
+	 *
+	 * @var Array
+	 * @access private
+	 */
+	var $zero;
 
-    /**
-     * Precomputed One
-     *
-     * @var Array
-     * @access private
-     */
-    var $one;
+	/**
+	 * Precomputed One
+	 *
+	 * @var Array
+	 * @access private
+	 */
+	var $one;
 
-    /**
-     * Private Key Format
-     *
-     * @var Integer
-     * @access private
-     */
-    var $privateKeyFormat = CRYPT_RSA_PRIVATE_FORMAT_PKCS1;
+	/**
+	 * Private Key Format
+	 *
+	 * @var Integer
+	 * @access private
+	 */
+	var $privateKeyFormat = CRYPT_RSA_PRIVATE_FORMAT_PKCS1;
 
-    /**
-     * Public Key Format
-     *
-     * @var Integer
-     * @access public
-     */
-    var $publicKeyFormat = CRYPT_RSA_PUBLIC_FORMAT_PKCS1;
+	/**
+	 * Public Key Format
+	 *
+	 * @var Integer
+	 * @access public
+	 */
+	var $publicKeyFormat = CRYPT_RSA_PUBLIC_FORMAT_PKCS1;
 
-    /**
-     * Modulus (ie. n)
-     *
-     * @var Math_BigInteger
-     * @access private
-     */
-    var $modulus;
+	/**
+	 * Modulus (ie. n)
+	 *
+	 * @var Math_BigInteger
+	 * @access private
+	 */
+	var $modulus;
 
-    /**
-     * Modulus length
-     *
-     * @var Math_BigInteger
-     * @access private
-     */
-    var $k;
+	/**
+	 * Modulus length
+	 *
+	 * @var Math_BigInteger
+	 * @access private
+	 */
+	var $k;
 
-    /**
-     * Exponent (ie. e or d)
-     *
-     * @var Math_BigInteger
-     * @access private
-     */
-    var $exponent;
+	/**
+	 * Exponent (ie. e or d)
+	 *
+	 * @var Math_BigInteger
+	 * @access private
+	 */
+	var $exponent;
 
-    /**
-     * Primes for Chinese Remainder Theorem (ie. p and q)
-     *
-     * @var Array
-     * @access private
-     */
-    var $primes;
+	/**
+	 * Primes for Chinese Remainder Theorem (ie. p and q)
+	 *
+	 * @var Array
+	 * @access private
+	 */
+	var $primes;
 
-    /**
-     * Exponents for Chinese Remainder Theorem (ie. dP and dQ)
-     *
-     * @var Array
-     * @access private
-     */
-    var $exponents;
+	/**
+	 * Exponents for Chinese Remainder Theorem (ie. dP and dQ)
+	 *
+	 * @var Array
+	 * @access private
+	 */
+	var $exponents;
 
-    /**
-     * Coefficients for Chinese Remainder Theorem (ie. qInv)
-     *
-     * @var Array
-     * @access private
-     */
-    var $coefficients;
+	/**
+	 * Coefficients for Chinese Remainder Theorem (ie. qInv)
+	 *
+	 * @var Array
+	 * @access private
+	 */
+	var $coefficients;
 
-    /**
-     * Hash name
-     *
-     * @var String
-     * @access private
-     */
-    var $hashName;
+	/**
+	 * Hash name
+	 *
+	 * @var String
+	 * @access private
+	 */
+	var $hashName;
 
-    /**
-     * Hash function
-     *
-     * @var Crypt_Hash
-     * @access private
-     */
-    var $hash;
+	/**
+	 * Hash function
+	 *
+	 * @var Crypt_Hash
+	 * @access private
+	 */
+	var $hash;
 
-    /**
-     * Length of hash function output
-     *
-     * @var Integer
-     * @access private
-     */
-    var $hLen;
+	/**
+	 * Length of hash function output
+	 *
+	 * @var Integer
+	 * @access private
+	 */
+	var $hLen;
 
-    /**
-     * Length of salt
-     *
-     * @var Integer
-     * @access private
-     */
-    var $sLen;
+	/**
+	 * Length of salt
+	 *
+	 * @var Integer
+	 * @access private
+	 */
+	var $sLen;
 
-    /**
-     * Hash function for the Mask Generation Function
-     *
-     * @var Crypt_Hash
-     * @access private
-     */
-    var $mgfHash;
+	/**
+	 * Hash function for the Mask Generation Function
+	 *
+	 * @var Crypt_Hash
+	 * @access private
+	 */
+	var $mgfHash;
 
-    /**
-     * Length of MGF hash function output
-     *
-     * @var Integer
-     * @access private
-     */
-    var $mgfHLen;
+	/**
+	 * Length of MGF hash function output
+	 *
+	 * @var Integer
+	 * @access private
+	 */
+	var $mgfHLen;
 
-    /**
-     * Encryption mode
-     *
-     * @var Integer
-     * @access private
-     */
-    var $encryptionMode = CRYPT_RSA_ENCRYPTION_OAEP;
+	/**
+	 * Encryption mode
+	 *
+	 * @var Integer
+	 * @access private
+	 */
+	var $encryptionMode = CRYPT_RSA_ENCRYPTION_OAEP;
 
-    /**
-     * Signature mode
-     *
-     * @var Integer
-     * @access private
-     */
-    var $signatureMode = CRYPT_RSA_SIGNATURE_PSS;
+	/**
+	 * Signature mode
+	 *
+	 * @var Integer
+	 * @access private
+	 */
+	var $signatureMode = CRYPT_RSA_SIGNATURE_PSS;
 
-    /**
-     * Public Exponent
-     *
-     * @var Mixed
-     * @access private
-     */
-    var $publicExponent = false;
+	/**
+	 * Public Exponent
+	 *
+	 * @var Mixed
+	 * @access private
+	 */
+	var $publicExponent = false;
 
-    /**
-     * Password
-     *
-     * @var String
-     * @access private
-     */
-    var $password = '';
+	/**
+	 * Password
+	 *
+	 * @var String
+	 * @access private
+	 */
+	var $password = '';
 
-    /**
-     * The constructor
-     *
-     * If you want to make use of the openssl extension, you'll need to set the mode manually, yourself.  The reason
-     * Crypt_RSA doesn't do it is because OpenSSL doesn't fail gracefully.  openssl_pkey_new(), in particular, requires
-     * openssl.cnf be present somewhere and, unfortunately, the only real way to find out is too late.
-     *
-     * @return Crypt_RSA
-     * @access public
-     */
-    function Crypt_RSA()
+	/**
+	 * The constructor
+	 *
+	 * If you want to make use of the openssl extension, you'll need to set the mode manually, yourself.  The reason
+	 * Crypt_RSA doesn't do it is because OpenSSL doesn't fail gracefully.  openssl_pkey_new(), in particular, requires
+	 * openssl.cnf be present somewhere and, unfortunately, the only real way to find out is too late.
+	 *
+	 * @return Crypt_RSA
+	 * @access public
+	 */
+	public function __construct()
+	{
+		if ( !defined('CRYPT_RSA_MODE') ) {
+			switch (true) {
+				//case extension_loaded('openssl') && version_compare(PHP_VERSION, '4.2.0', '>='):
+				//    define('CRYPT_RSA_MODE', CRYPT_RSA_MODE_OPENSSL);
+				//    break;
+				default:
+					define('CRYPT_RSA_MODE', CRYPT_RSA_MODE_INTERNAL);
+			}
+		}
+
+		$this->zero = new Math_BigInteger();
+		$this->one = new Math_BigInteger(1);
+
+		$this->hash = new Crypt_Hash('sha1');
+		$this->hLen = $this->hash->getLength();
+		$this->hashName = 'sha1';
+		$this->mgfHash = new Crypt_Hash('sha1');
+		$this->mgfHLen = $this->mgfHash->getLength();
+	}
+
+    public function Crypt_RSA()
     {
-        if ( !defined('CRYPT_RSA_MODE') ) {
-            switch (true) {
-                //case extension_loaded('openssl') && version_compare(PHP_VERSION, '4.2.0', '>='):
-                //    define('CRYPT_RSA_MODE', CRYPT_RSA_MODE_OPENSSL);
-                //    break;
-                default:
-                    define('CRYPT_RSA_MODE', CRYPT_RSA_MODE_INTERNAL);
-            }
-        }
-
-        $this->zero = new Math_BigInteger();
-        $this->one = new Math_BigInteger(1);
-
-        $this->hash = new Crypt_Hash('sha1');
-        $this->hLen = $this->hash->getLength();
-        $this->hashName = 'sha1';
-        $this->mgfHash = new Crypt_Hash('sha1');
-        $this->mgfHLen = $this->mgfHash->getLength();
+		self::__construct();
     }
 
     /**

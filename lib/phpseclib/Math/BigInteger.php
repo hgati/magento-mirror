@@ -264,186 +264,191 @@ class Math_BigInteger {
      * @return Math_BigInteger
      * @access public
      */
-    function Math_BigInteger($x = 0, $base = 10)
+	public function __construct($x = 0, $base = 10)
+	{
+		if ( !defined('MATH_BIGINTEGER_MODE') ) {
+			switch (true) {
+				case extension_loaded('gmp'):
+					define('MATH_BIGINTEGER_MODE', MATH_BIGINTEGER_MODE_GMP);
+					break;
+				case extension_loaded('bcmath'):
+					define('MATH_BIGINTEGER_MODE', MATH_BIGINTEGER_MODE_BCMATH);
+					break;
+				default:
+					define('MATH_BIGINTEGER_MODE', MATH_BIGINTEGER_MODE_INTERNAL);
+			}
+		}
+
+		switch ( MATH_BIGINTEGER_MODE ) {
+			case MATH_BIGINTEGER_MODE_GMP:
+				if (is_resource($x) && get_resource_type($x) == 'GMP integer') {
+					$this->value = $x;
+					return;
+				}
+				$this->value = gmp_init(0);
+				break;
+			case MATH_BIGINTEGER_MODE_BCMATH:
+				$this->value = '0';
+				break;
+			default:
+				$this->value = array();
+		}
+
+		if (empty($x)) {
+			return;
+		}
+
+		switch ($base) {
+			case -256:
+				if (ord($x[0]) & 0x80) {
+					$x = ~$x;
+					$this->is_negative = true;
+				}
+			case  256:
+				switch ( MATH_BIGINTEGER_MODE ) {
+					case MATH_BIGINTEGER_MODE_GMP:
+						$sign = $this->is_negative ? '-' : '';
+						$this->value = gmp_init($sign . '0x' . bin2hex($x));
+						break;
+					case MATH_BIGINTEGER_MODE_BCMATH:
+						// round $len to the nearest 4 (thanks, DavidMJ!)
+						$len = (strlen($x) + 3) & 0xFFFFFFFC;
+
+						$x = str_pad($x, $len, chr(0), STR_PAD_LEFT);
+
+						for ($i = 0; $i < $len; $i+= 4) {
+							$this->value = bcmul($this->value, '4294967296', 0); // 4294967296 == 2**32
+							$this->value = bcadd($this->value, 0x1000000 * ord($x[$i]) + ((ord($x[$i + 1]) << 16) | (ord($x[$i + 2]) << 8) | ord($x[$i + 3])), 0);
+						}
+
+						if ($this->is_negative) {
+							$this->value = '-' . $this->value;
+						}
+
+						break;
+					// converts a base-2**8 (big endian / msb) number to base-2**26 (little endian / lsb)
+					default:
+						while (strlen($x)) {
+							$this->value[] = $this->_bytes2int($this->_base256_rshift($x, 26));
+						}
+				}
+
+				if ($this->is_negative) {
+					if (MATH_BIGINTEGER_MODE != MATH_BIGINTEGER_MODE_INTERNAL) {
+						$this->is_negative = false;
+					}
+					$temp = $this->add(new Math_BigInteger('-1'));
+					$this->value = $temp->value;
+				}
+				break;
+			case  16:
+			case -16:
+				if ($base > 0 && $x[0] == '-') {
+					$this->is_negative = true;
+					$x = substr($x, 1);
+				}
+
+				$x = preg_replace('#^(?:0x)?([A-Fa-f0-9]*).*#', '$1', $x);
+
+				$is_negative = false;
+				if ($base < 0 && hexdec($x[0]) >= 8) {
+					$this->is_negative = $is_negative = true;
+					$x = bin2hex(~pack('H*', $x));
+				}
+
+				switch ( MATH_BIGINTEGER_MODE ) {
+					case MATH_BIGINTEGER_MODE_GMP:
+						$temp = $this->is_negative ? '-0x' . $x : '0x' . $x;
+						$this->value = gmp_init($temp);
+						$this->is_negative = false;
+						break;
+					case MATH_BIGINTEGER_MODE_BCMATH:
+						$x = ( strlen($x) & 1 ) ? '0' . $x : $x;
+						$temp = new Math_BigInteger(pack('H*', $x), 256);
+						$this->value = $this->is_negative ? '-' . $temp->value : $temp->value;
+						$this->is_negative = false;
+						break;
+					default:
+						$x = ( strlen($x) & 1 ) ? '0' . $x : $x;
+						$temp = new Math_BigInteger(pack('H*', $x), 256);
+						$this->value = $temp->value;
+				}
+
+				if ($is_negative) {
+					$temp = $this->add(new Math_BigInteger('-1'));
+					$this->value = $temp->value;
+				}
+				break;
+			case  10:
+			case -10:
+				$x = preg_replace('#^(-?[0-9]*).*#', '$1', $x);
+
+				switch ( MATH_BIGINTEGER_MODE ) {
+					case MATH_BIGINTEGER_MODE_GMP:
+						$this->value = gmp_init($x);
+						break;
+					case MATH_BIGINTEGER_MODE_BCMATH:
+						// explicitly casting $x to a string is necessary, here, since doing $x[0] on -1 yields different
+						// results then doing it on '-1' does (modInverse does $x[0])
+						$this->value = (string) $x;
+						break;
+					default:
+						$temp = new Math_BigInteger();
+
+						// array(10000000) is 10**7 in base-2**26.  10**7 is the closest to 2**26 we can get without passing it.
+						$multiplier = new Math_BigInteger();
+						$multiplier->value = array(10000000);
+
+						if ($x[0] == '-') {
+							$this->is_negative = true;
+							$x = substr($x, 1);
+						}
+
+						$x = str_pad($x, strlen($x) + (6 * strlen($x)) % 7, 0, STR_PAD_LEFT);
+
+						while (strlen($x)) {
+							$temp = $temp->multiply($multiplier);
+							$temp = $temp->add(new Math_BigInteger($this->_int2bytes(substr($x, 0, 7)), 256));
+							$x = substr($x, 7);
+						}
+
+						$this->value = $temp->value;
+				}
+				break;
+			case  2: // base-2 support originally implemented by Lluis Pamies - thanks!
+			case -2:
+				if ($base > 0 && $x[0] == '-') {
+					$this->is_negative = true;
+					$x = substr($x, 1);
+				}
+
+				$x = preg_replace('#^([01]*).*#', '$1', $x);
+				$x = str_pad($x, strlen($x) + (3 * strlen($x)) % 4, 0, STR_PAD_LEFT);
+
+				$str = '0x';
+				while (strlen($x)) {
+					$part = substr($x, 0, 4);
+					$str.= dechex(bindec($part));
+					$x = substr($x, 4);
+				}
+
+				if ($this->is_negative) {
+					$str = '-' . $str;
+				}
+
+				$temp = new Math_BigInteger($str, 8 * $base); // ie. either -16 or +16
+				$this->value = $temp->value;
+				$this->is_negative = $temp->is_negative;
+
+				break;
+			default:
+				// base not supported, so we'll let $this == 0
+		}
+	}
+
+    public function Math_BigInteger($x = 0, $base = 10)
     {
-        if ( !defined('MATH_BIGINTEGER_MODE') ) {
-            switch (true) {
-                case extension_loaded('gmp'):
-                    define('MATH_BIGINTEGER_MODE', MATH_BIGINTEGER_MODE_GMP);
-                    break;
-                case extension_loaded('bcmath'):
-                    define('MATH_BIGINTEGER_MODE', MATH_BIGINTEGER_MODE_BCMATH);
-                    break;
-                default:
-                    define('MATH_BIGINTEGER_MODE', MATH_BIGINTEGER_MODE_INTERNAL);
-            }
-        }
-
-        switch ( MATH_BIGINTEGER_MODE ) {
-            case MATH_BIGINTEGER_MODE_GMP:
-                if (is_resource($x) && get_resource_type($x) == 'GMP integer') {
-                    $this->value = $x;
-                    return;
-                }
-                $this->value = gmp_init(0);
-                break;
-            case MATH_BIGINTEGER_MODE_BCMATH:
-                $this->value = '0';
-                break;
-            default:
-                $this->value = array();
-        }
-
-        if (empty($x)) {
-            return;
-        }
-
-        switch ($base) {
-            case -256:
-                if (ord($x[0]) & 0x80) {
-                    $x = ~$x;
-                    $this->is_negative = true;
-                }
-            case  256:
-                switch ( MATH_BIGINTEGER_MODE ) {
-                    case MATH_BIGINTEGER_MODE_GMP:
-                        $sign = $this->is_negative ? '-' : '';
-                        $this->value = gmp_init($sign . '0x' . bin2hex($x));
-                        break;
-                    case MATH_BIGINTEGER_MODE_BCMATH:
-                        // round $len to the nearest 4 (thanks, DavidMJ!)
-                        $len = (strlen($x) + 3) & 0xFFFFFFFC;
-
-                        $x = str_pad($x, $len, chr(0), STR_PAD_LEFT);
-
-                        for ($i = 0; $i < $len; $i+= 4) {
-                            $this->value = bcmul($this->value, '4294967296', 0); // 4294967296 == 2**32
-                            $this->value = bcadd($this->value, 0x1000000 * ord($x[$i]) + ((ord($x[$i + 1]) << 16) | (ord($x[$i + 2]) << 8) | ord($x[$i + 3])), 0);
-                        }
-
-                        if ($this->is_negative) {
-                            $this->value = '-' . $this->value;
-                        }
-
-                        break;
-                    // converts a base-2**8 (big endian / msb) number to base-2**26 (little endian / lsb)
-                    default:
-                        while (strlen($x)) {
-                            $this->value[] = $this->_bytes2int($this->_base256_rshift($x, 26));
-                        }
-                }
-
-                if ($this->is_negative) {
-                    if (MATH_BIGINTEGER_MODE != MATH_BIGINTEGER_MODE_INTERNAL) {
-                        $this->is_negative = false;
-                    }
-                    $temp = $this->add(new Math_BigInteger('-1'));
-                    $this->value = $temp->value;
-                }
-                break;
-            case  16:
-            case -16:
-                if ($base > 0 && $x[0] == '-') {
-                    $this->is_negative = true;
-                    $x = substr($x, 1);
-                }
-
-                $x = preg_replace('#^(?:0x)?([A-Fa-f0-9]*).*#', '$1', $x);
-
-                $is_negative = false;
-                if ($base < 0 && hexdec($x[0]) >= 8) {
-                    $this->is_negative = $is_negative = true;
-                    $x = bin2hex(~pack('H*', $x));
-                }
-
-                switch ( MATH_BIGINTEGER_MODE ) {
-                    case MATH_BIGINTEGER_MODE_GMP:
-                        $temp = $this->is_negative ? '-0x' . $x : '0x' . $x;
-                        $this->value = gmp_init($temp);
-                        $this->is_negative = false;
-                        break;
-                    case MATH_BIGINTEGER_MODE_BCMATH:
-                        $x = ( strlen($x) & 1 ) ? '0' . $x : $x;
-                        $temp = new Math_BigInteger(pack('H*', $x), 256);
-                        $this->value = $this->is_negative ? '-' . $temp->value : $temp->value;
-                        $this->is_negative = false;
-                        break;
-                    default:
-                        $x = ( strlen($x) & 1 ) ? '0' . $x : $x;
-                        $temp = new Math_BigInteger(pack('H*', $x), 256);
-                        $this->value = $temp->value;
-                }
-
-                if ($is_negative) {
-                    $temp = $this->add(new Math_BigInteger('-1'));
-                    $this->value = $temp->value;
-                }
-                break;
-            case  10:
-            case -10:
-                $x = preg_replace('#^(-?[0-9]*).*#', '$1', $x);
-
-                switch ( MATH_BIGINTEGER_MODE ) {
-                    case MATH_BIGINTEGER_MODE_GMP:
-                        $this->value = gmp_init($x);
-                        break;
-                    case MATH_BIGINTEGER_MODE_BCMATH:
-                        // explicitly casting $x to a string is necessary, here, since doing $x[0] on -1 yields different
-                        // results then doing it on '-1' does (modInverse does $x[0])
-                        $this->value = (string) $x;
-                        break;
-                    default:
-                        $temp = new Math_BigInteger();
-
-                        // array(10000000) is 10**7 in base-2**26.  10**7 is the closest to 2**26 we can get without passing it.
-                        $multiplier = new Math_BigInteger();
-                        $multiplier->value = array(10000000);
-
-                        if ($x[0] == '-') {
-                            $this->is_negative = true;
-                            $x = substr($x, 1);
-                        }
-
-                        $x = str_pad($x, strlen($x) + (6 * strlen($x)) % 7, 0, STR_PAD_LEFT);
-
-                        while (strlen($x)) {
-                            $temp = $temp->multiply($multiplier);
-                            $temp = $temp->add(new Math_BigInteger($this->_int2bytes(substr($x, 0, 7)), 256));
-                            $x = substr($x, 7);
-                        }
-
-                        $this->value = $temp->value;
-                }
-                break;
-            case  2: // base-2 support originally implemented by Lluis Pamies - thanks!
-            case -2:
-                if ($base > 0 && $x[0] == '-') {
-                    $this->is_negative = true;
-                    $x = substr($x, 1);
-                }
-
-                $x = preg_replace('#^([01]*).*#', '$1', $x);
-                $x = str_pad($x, strlen($x) + (3 * strlen($x)) % 4, 0, STR_PAD_LEFT);
-
-                $str = '0x';
-                while (strlen($x)) {
-                    $part = substr($x, 0, 4);
-                    $str.= dechex(bindec($part));
-                    $x = substr($x, 4);
-                }
-
-                if ($this->is_negative) {
-                    $str = '-' . $str;
-                }
-
-                $temp = new Math_BigInteger($str, 8 * $base); // ie. either -16 or +16
-                $this->value = $temp->value;
-                $this->is_negative = $temp->is_negative;
-
-                break;
-            default:
-                // base not supported, so we'll let $this == 0
-        }
+		self::__construct($x, $base);
     }
 
     /**

@@ -229,48 +229,53 @@ class Crypt_DES {
      * @return Crypt_DES
      * @access public
      */
-    function Crypt_DES($mode = CRYPT_MODE_DES_CBC)
+	public function __construct($mode = CRYPT_MODE_DES_CBC)
+	{
+		if ( !defined('CRYPT_DES_MODE') ) {
+			switch (true) {
+				case extension_loaded('mcrypt'):
+					// i'd check to see if des was supported, by doing in_array('des', mcrypt_list_algorithms('')),
+					// but since that can be changed after the object has been created, there doesn't seem to be
+					// a lot of point...
+					define('CRYPT_DES_MODE', CRYPT_DES_MODE_MCRYPT);
+					break;
+				default:
+					define('CRYPT_DES_MODE', CRYPT_DES_MODE_INTERNAL);
+			}
+		}
+
+		switch ( CRYPT_DES_MODE ) {
+			case CRYPT_DES_MODE_MCRYPT:
+				switch ($mode) {
+					case CRYPT_DES_MODE_ECB:
+						$this->mode = MCRYPT_MODE_ECB;
+						break;
+					case CRYPT_DES_MODE_CTR:
+						$this->mode = 'ctr';
+						//$this->mode = in_array('ctr', mcrypt_list_modes()) ? 'ctr' : CRYPT_DES_MODE_CTR;
+						break;
+					case CRYPT_DES_MODE_CBC:
+					default:
+						$this->mode = MCRYPT_MODE_CBC;
+				}
+
+				break;
+			default:
+				switch ($mode) {
+					case CRYPT_DES_MODE_ECB:
+					case CRYPT_DES_MODE_CTR:
+					case CRYPT_DES_MODE_CBC:
+						$this->mode = $mode;
+						break;
+					default:
+						$this->mode = CRYPT_DES_MODE_CBC;
+				}
+		}
+	}
+
+    public function Crypt_DES($mode = CRYPT_MODE_DES_CBC)
     {
-        if ( !defined('CRYPT_DES_MODE') ) {
-            switch (true) {
-                case extension_loaded('mcrypt'):
-                    // i'd check to see if des was supported, by doing in_array('des', mcrypt_list_algorithms('')),
-                    // but since that can be changed after the object has been created, there doesn't seem to be
-                    // a lot of point...
-                    define('CRYPT_DES_MODE', CRYPT_DES_MODE_MCRYPT);
-                    break;
-                default:
-                    define('CRYPT_DES_MODE', CRYPT_DES_MODE_INTERNAL);
-            }
-        }
-
-        switch ( CRYPT_DES_MODE ) {
-            case CRYPT_DES_MODE_MCRYPT:
-                switch ($mode) {
-                    case CRYPT_DES_MODE_ECB:
-                        $this->mode = MCRYPT_MODE_ECB;
-                        break;
-                    case CRYPT_DES_MODE_CTR:
-                        $this->mode = 'ctr';
-                        //$this->mode = in_array('ctr', mcrypt_list_modes()) ? 'ctr' : CRYPT_DES_MODE_CTR;
-                        break;
-                    case CRYPT_DES_MODE_CBC:
-                    default:
-                        $this->mode = MCRYPT_MODE_CBC;
-                }
-
-                break;
-            default:
-                switch ($mode) {
-                    case CRYPT_DES_MODE_ECB:
-                    case CRYPT_DES_MODE_CTR:
-                    case CRYPT_DES_MODE_CBC:
-                        $this->mode = $mode;
-                        break;
-                    default:
-                        $this->mode = CRYPT_DES_MODE_CBC;
-                }
-        }
+		self::__construct($mode);
     }
 
     /**
