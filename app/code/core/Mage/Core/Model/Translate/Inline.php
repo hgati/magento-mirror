@@ -275,6 +275,20 @@ class Mage_Core_Model_Translate_Inline
 <script type="text/javascript">
     new TranslateInline('translate-inline-trig', '<?php echo $ajaxUrl ?>', '<?php
         echo Mage::getDesign()->getArea() ?>');
+
+	// fixed bug start : Not working chrome recent version
+	/* http://magento.stackexchange.com/questions/6435/inline-translate-chrome-bug */
+	if(Object.__defineGetter__) {
+		var hasTranslateAttribute = function(){
+			return $(this).hasAttribute("translate");
+		};
+		document.observe("dom:loaded", function() {
+			$$('*').each(function(theElement){
+				theElement.__defineGetter__("translate", hasTranslateAttribute);
+			});
+		});
+	}
+	// fixed bug end
 </script>
 <?php
         $html = ob_get_clean();

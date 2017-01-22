@@ -43,6 +43,16 @@ class Mage_Catalog_Model_Category_Attribute_Backend_Image extends Mage_Eav_Model
     public function afterSave($object)
     {
         $value = $object->getData($this->getAttribute()->getName());
+		// fixed bug start
+		/*
+		 MAGENTO 2 Official Patch to avoid exception '$_FILES array is empty' when assiging
+		products to a category or creating a category with the API.
+		*/
+		// if no image was set - nothing to do
+		if (empty($value) && empty($_FILES)) {
+			return $this;
+		}
+		// fixed bug end
 
         if (is_array($value) && !empty($value['delete'])) {
             $object->setData($this->getAttribute()->getName(), '');

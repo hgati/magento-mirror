@@ -162,8 +162,9 @@ class Mage_Captcha_Model_Observer
     {
         $formId = 'backend_login';
         $captchaModel = Mage::helper('captcha')->getCaptcha($formId);
-        $loginParams = Mage::app()->getRequest()->getPost('login');
-        $login = array_key_exists('username', $loginParams) ? $loginParams['username'] : null;
+        //$loginParams = Mage::app()->getRequest()->getPost('login');
+        //$login = array_key_exists('username', $loginParams) ? $loginParams['username'] : null;
+		$login = Mage::app()->getRequest()->getPost('username'); // fiexed bug
         if ($captchaModel->isRequired($login)) {
             if (!$captchaModel->isCorrect($this->_getCaptchaString(Mage::app()->getRequest(), $formId))) {
                 $captchaModel->logAttempt($login);
