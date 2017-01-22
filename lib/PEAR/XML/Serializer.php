@@ -585,14 +585,19 @@ class XML_Serializer extends PEAR
      * @return void
      * @access public
      */
-    function XML_Serializer( $options = null )
+	public function __construct($options = null)
+	{
+		$this->PEAR();
+		if (is_array($options)) {
+			$this->options = array_merge($this->_defaultOptions, $options);
+		} else {
+			$this->options = $this->_defaultOptions;
+		}
+	}
+
+    public function XML_Serializer( $options = null )
     {
-        $this->PEAR();
-        if (is_array($options)) {
-            $this->options = array_merge($this->_defaultOptions, $options);
-        } else {
-            $this->options = $this->_defaultOptions;
-        }
+		self::__construct($options);
     }
 
     /**

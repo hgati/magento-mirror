@@ -202,32 +202,38 @@ class SOAP_Client extends SOAP_Client_Overload
      * @param boolean|string $cache  Use WSDL caching? The cache directory if
      *                               a string.
      */
-    function SOAP_Client($endpoint, $wsdl = false, $portName = false,
+	public function __construct($endpoint, $wsdl = false, $portName = false,
+								$proxy_params = array(), $cache = false)
+	{
+		parent::SOAP_Base('Client');
+
+		$this->_endpoint = $endpoint;
+		$this->_portName = $portName;
+		$this->_proxy_params = $proxy_params;
+
+		// This hack should perhaps be removed as it might cause unexpected
+		// behaviour.
+		$wsdl = $wsdl
+			? $wsdl
+			: strtolower(substr($endpoint, -4)) == 'wsdl';
+
+		// make values
+		if ($wsdl) {
+			$this->_endpointType = 'wsdl';
+			// instantiate wsdl class
+			$this->_wsdl = new SOAP_WSDL($this->_endpoint,
+				$this->_proxy_params,
+				$cache);
+			if ($this->_wsdl->fault) {
+				$this->_raiseSoapFault($this->_wsdl->fault);
+			}
+		}
+	}
+
+    public function SOAP_Client($endpoint, $wsdl = false, $portName = false,
                          $proxy_params = array(), $cache = false)
     {
-        parent::SOAP_Base('Client');
-
-        $this->_endpoint = $endpoint;
-        $this->_portName = $portName;
-        $this->_proxy_params = $proxy_params;
-
-        // This hack should perhaps be removed as it might cause unexpected
-        // behaviour.
-        $wsdl = $wsdl
-            ? $wsdl
-            : strtolower(substr($endpoint, -4)) == 'wsdl';
-
-        // make values
-        if ($wsdl) {
-            $this->_endpointType = 'wsdl';
-            // instantiate wsdl class
-            $this->_wsdl = new SOAP_WSDL($this->_endpoint,
-                                         $this->_proxy_params,
-                                         $cache);
-            if ($this->_wsdl->fault) {
-                $this->_raiseSoapFault($this->_wsdl->fault);
-            }
-        }
+		self::__construct($endpoint, $wsdl, $portName, $proxy_params, $cache);
     }
 
     function _reset()

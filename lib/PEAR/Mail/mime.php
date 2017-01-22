@@ -176,18 +176,23 @@ class Mail_mime
      *
      * @access public
      */
-    function Mail_mime($crlf = "\r\n")
+	public function __construct($crlf = "\r\n")
+	{
+		$this->_setEOL($crlf);
+		$this->_build_params = array(
+			'head_encoding' => 'quoted-printable',
+			'text_encoding' => '7bit',
+			'html_encoding' => 'quoted-printable',
+			'7bit_wrap'     => 998,
+			'html_charset'  => 'ISO-8859-1',
+			'text_charset'  => 'ISO-8859-1',
+			'head_charset'  => 'ISO-8859-1'
+		);
+	}
+
+    public function Mail_mime($crlf = "\r\n")
     {
-        $this->_setEOL($crlf);
-        $this->_build_params = array(
-                                     'head_encoding' => 'quoted-printable',
-                                     'text_encoding' => '7bit',
-                                     'html_encoding' => 'quoted-printable',
-                                     '7bit_wrap'     => 998,
-                                     'html_charset'  => 'ISO-8859-1',
-                                     'text_charset'  => 'ISO-8859-1',
-                                     'head_charset'  => 'ISO-8859-1'
-                                    );
+		self::__construct($crlf);
     }
 
     /**
@@ -1015,8 +1020,8 @@ class Mail_mime
                     
                     //Replace all extended characters (\x80-xFF) with their
                     //ASCII values.
-                    $hdr_value = preg_replace('#([\x80-\xFF])#e',
-                        '"=" . strtoupper(dechex(ord("\1")))',
+                    $hdr_value = preg_replace_callback('#([\x80-\xFF])#',
+						function($m){ return "=".strtoupper(dechex(ord($m[1]))); },
                         $hdr_value);
 
                     //This regexp will break QP-encoded text at every $maxLength

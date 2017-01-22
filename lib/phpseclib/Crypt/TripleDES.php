@@ -194,74 +194,79 @@ class Crypt_TripleDES {
      * @return Crypt_TripleDES
      * @access public
      */
-    function Crypt_TripleDES($mode = CRYPT_DES_MODE_CBC)
+	public function __construct($mode = CRYPT_DES_MODE_CBC)
+	{
+		if ( !defined('CRYPT_DES_MODE') ) {
+			switch (true) {
+				case extension_loaded('mcrypt'):
+					// i'd check to see if des was supported, by doing in_array('des', mcrypt_list_algorithms('')),
+					// but since that can be changed after the object has been created, there doesn't seem to be
+					// a lot of point...
+					define('CRYPT_DES_MODE', CRYPT_DES_MODE_MCRYPT);
+					break;
+				default:
+					define('CRYPT_DES_MODE', CRYPT_DES_MODE_INTERNAL);
+			}
+		}
+
+		if ( $mode == CRYPT_DES_MODE_3CBC ) {
+			$this->mode = CRYPT_DES_MODE_3CBC;
+			$this->des = array(
+				new Crypt_DES(CRYPT_DES_MODE_CBC),
+				new Crypt_DES(CRYPT_DES_MODE_CBC),
+				new Crypt_DES(CRYPT_DES_MODE_CBC)
+			);
+
+			// we're going to be doing the padding, ourselves, so disable it in the Crypt_DES objects
+			$this->des[0]->disablePadding();
+			$this->des[1]->disablePadding();
+			$this->des[2]->disablePadding();
+
+			return;
+		}
+
+		switch ( CRYPT_DES_MODE ) {
+			case CRYPT_DES_MODE_MCRYPT:
+				switch ($mode) {
+					case CRYPT_DES_MODE_ECB:
+						$this->mode = MCRYPT_MODE_ECB;
+						break;
+					case CRYPT_DES_MODE_CTR:
+						$this->mode = 'ctr';
+						break;
+					case CRYPT_DES_MODE_CBC:
+					default:
+						$this->mode = MCRYPT_MODE_CBC;
+				}
+
+				break;
+			default:
+				$this->des = array(
+					new Crypt_DES(CRYPT_DES_MODE_ECB),
+					new Crypt_DES(CRYPT_DES_MODE_ECB),
+					new Crypt_DES(CRYPT_DES_MODE_ECB)
+				);
+
+				// we're going to be doing the padding, ourselves, so disable it in the Crypt_DES objects
+				$this->des[0]->disablePadding();
+				$this->des[1]->disablePadding();
+				$this->des[2]->disablePadding();
+
+				switch ($mode) {
+					case CRYPT_DES_MODE_ECB:
+					case CRYPT_DES_MODE_CTR:
+					case CRYPT_DES_MODE_CBC:
+						$this->mode = $mode;
+						break;
+					default:
+						$this->mode = CRYPT_DES_MODE_CBC;
+				}
+		}
+	}
+
+    public function Crypt_TripleDES($mode = CRYPT_DES_MODE_CBC)
     {
-        if ( !defined('CRYPT_DES_MODE') ) {
-            switch (true) {
-                case extension_loaded('mcrypt'):
-                    // i'd check to see if des was supported, by doing in_array('des', mcrypt_list_algorithms('')),
-                    // but since that can be changed after the object has been created, there doesn't seem to be
-                    // a lot of point...
-                    define('CRYPT_DES_MODE', CRYPT_DES_MODE_MCRYPT);
-                    break;
-                default:
-                    define('CRYPT_DES_MODE', CRYPT_DES_MODE_INTERNAL);
-            }
-        }
-
-        if ( $mode == CRYPT_DES_MODE_3CBC ) {
-            $this->mode = CRYPT_DES_MODE_3CBC;
-            $this->des = array(
-                new Crypt_DES(CRYPT_DES_MODE_CBC),
-                new Crypt_DES(CRYPT_DES_MODE_CBC),
-                new Crypt_DES(CRYPT_DES_MODE_CBC)
-            );
-
-            // we're going to be doing the padding, ourselves, so disable it in the Crypt_DES objects
-            $this->des[0]->disablePadding();
-            $this->des[1]->disablePadding();
-            $this->des[2]->disablePadding();
-
-            return;
-        }
-
-        switch ( CRYPT_DES_MODE ) {
-            case CRYPT_DES_MODE_MCRYPT:
-                switch ($mode) {
-                    case CRYPT_DES_MODE_ECB:
-                        $this->mode = MCRYPT_MODE_ECB;
-                        break;
-                    case CRYPT_DES_MODE_CTR:
-                        $this->mode = 'ctr';
-                        break;
-                    case CRYPT_DES_MODE_CBC:
-                    default:
-                        $this->mode = MCRYPT_MODE_CBC;
-                }
-
-                break;
-            default:
-                $this->des = array(
-                    new Crypt_DES(CRYPT_DES_MODE_ECB),
-                    new Crypt_DES(CRYPT_DES_MODE_ECB),
-                    new Crypt_DES(CRYPT_DES_MODE_ECB)
-                );
- 
-                // we're going to be doing the padding, ourselves, so disable it in the Crypt_DES objects
-                $this->des[0]->disablePadding();
-                $this->des[1]->disablePadding();
-                $this->des[2]->disablePadding();
-
-                switch ($mode) {
-                    case CRYPT_DES_MODE_ECB:
-                    case CRYPT_DES_MODE_CTR:
-                    case CRYPT_DES_MODE_CBC:
-                        $this->mode = $mode;
-                        break;
-                    default:
-                        $this->mode = CRYPT_DES_MODE_CBC;
-                }
-        }
+		self::__construct($mode);
     }
 
     /**

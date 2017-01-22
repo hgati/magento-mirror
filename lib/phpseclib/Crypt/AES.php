@@ -149,57 +149,62 @@ class Crypt_AES extends Crypt_Rijndael {
      * @return Crypt_AES
      * @access public
      */
-    function Crypt_AES($mode = CRYPT_AES_MODE_CBC)
+	public function __construct($mode = CRYPT_AES_MODE_CBC)
+	{
+		if ( !defined('CRYPT_AES_MODE') ) {
+			switch (true) {
+				case extension_loaded('mcrypt'):
+					// i'd check to see if aes was supported, by doing in_array('des', mcrypt_list_algorithms('')),
+					// but since that can be changed after the object has been created, there doesn't seem to be
+					// a lot of point...
+					define('CRYPT_AES_MODE', CRYPT_AES_MODE_MCRYPT);
+					break;
+				default:
+					define('CRYPT_AES_MODE', CRYPT_AES_MODE_INTERNAL);
+			}
+		}
+
+		switch ( CRYPT_AES_MODE ) {
+			case CRYPT_AES_MODE_MCRYPT:
+				switch ($mode) {
+					case CRYPT_AES_MODE_ECB:
+						$this->mode = MCRYPT_MODE_ECB;
+						break;
+					case CRYPT_AES_MODE_CTR:
+						// ctr doesn't have a constant associated with it even though it appears to be fairly widely
+						// supported.  in lieu of knowing just how widely supported it is, i've, for now, opted not to
+						// include a compatibility layer.  the layer has been implemented but, for now, is commented out.
+						$this->mode = 'ctr';
+						//$this->mode = in_array('ctr', mcrypt_list_modes()) ? 'ctr' : CRYPT_AES_MODE_CTR;
+						break;
+					case CRYPT_AES_MODE_CBC:
+					default:
+						$this->mode = MCRYPT_MODE_CBC;
+				}
+
+				break;
+			default:
+				switch ($mode) {
+					case CRYPT_AES_MODE_ECB:
+						$this->mode = CRYPT_RIJNDAEL_MODE_ECB;
+						break;
+					case CRYPT_AES_MODE_CTR:
+						$this->mode = CRYPT_RIJNDAEL_MODE_CTR;
+						break;
+					case CRYPT_AES_MODE_CBC:
+					default:
+						$this->mode = CRYPT_RIJNDAEL_MODE_CBC;
+				}
+		}
+
+		if (CRYPT_AES_MODE == CRYPT_AES_MODE_INTERNAL) {
+			parent::Crypt_Rijndael($this->mode);
+		}
+	}
+
+    public function Crypt_AES($mode = CRYPT_AES_MODE_CBC)
     {
-        if ( !defined('CRYPT_AES_MODE') ) {
-            switch (true) {
-                case extension_loaded('mcrypt'):
-                    // i'd check to see if aes was supported, by doing in_array('des', mcrypt_list_algorithms('')),
-                    // but since that can be changed after the object has been created, there doesn't seem to be
-                    // a lot of point...
-                    define('CRYPT_AES_MODE', CRYPT_AES_MODE_MCRYPT);
-                    break;
-                default:
-                    define('CRYPT_AES_MODE', CRYPT_AES_MODE_INTERNAL);
-            }
-        }
-
-        switch ( CRYPT_AES_MODE ) {
-            case CRYPT_AES_MODE_MCRYPT:
-                switch ($mode) {
-                    case CRYPT_AES_MODE_ECB:
-                        $this->mode = MCRYPT_MODE_ECB;
-                        break;
-                    case CRYPT_AES_MODE_CTR:
-                        // ctr doesn't have a constant associated with it even though it appears to be fairly widely
-                        // supported.  in lieu of knowing just how widely supported it is, i've, for now, opted not to
-                        // include a compatibility layer.  the layer has been implemented but, for now, is commented out.
-                        $this->mode = 'ctr';
-                        //$this->mode = in_array('ctr', mcrypt_list_modes()) ? 'ctr' : CRYPT_AES_MODE_CTR;
-                        break;
-                    case CRYPT_AES_MODE_CBC:
-                    default:
-                        $this->mode = MCRYPT_MODE_CBC;
-                }
-
-                break;
-            default:
-                switch ($mode) {
-                    case CRYPT_AES_MODE_ECB:
-                        $this->mode = CRYPT_RIJNDAEL_MODE_ECB;
-                        break;
-                    case CRYPT_AES_MODE_CTR:
-                        $this->mode = CRYPT_RIJNDAEL_MODE_CTR;
-                        break;
-                    case CRYPT_AES_MODE_CBC:
-                    default:
-                        $this->mode = CRYPT_RIJNDAEL_MODE_CBC;
-                }
-        }
-
-        if (CRYPT_AES_MODE == CRYPT_AES_MODE_INTERNAL) {
-            parent::Crypt_Rijndael($this->mode);
-        }
+		self::__construct($mode);
     }
 
     /**

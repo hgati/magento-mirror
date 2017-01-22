@@ -389,151 +389,156 @@ class Net_SSH1 {
      * @return Net_SSH1
      * @access public
      */
-    function Net_SSH1($host, $port = 22, $timeout = 10, $cipher = NET_SSH1_CIPHER_3DES)
+	public function __construct($host, $port = 22, $timeout = 10, $cipher = NET_SSH1_CIPHER_3DES)
+	{
+		$this->fsock = @fsockopen($host, $port, $errno, $errstr, $timeout);
+		if (!$this->fsock) {
+			user_error(rtrim("Cannot connect to $host. Error $errno. $errstr"), E_USER_NOTICE);
+			return;
+		}
+
+		$this->server_identification = $init_line = fgets($this->fsock, 255);
+		if (!preg_match('#SSH-([0-9\.]+)-(.+)#', $init_line, $parts)) {
+			user_error('Can only connect to SSH servers', E_USER_NOTICE);
+			return;
+		}
+		if ($parts[1][0] != 1) {
+			user_error("Cannot connect to SSH $parts[1] servers", E_USER_NOTICE);
+			return;
+		}
+
+		fputs($this->fsock, $this->identifier."\r\n");
+
+		$response = $this->_get_binary_packet();
+		if ($response[NET_SSH1_RESPONSE_TYPE] != NET_SSH1_SMSG_PUBLIC_KEY) {
+			user_error('Expected SSH_SMSG_PUBLIC_KEY', E_USER_NOTICE);
+			return;
+		}
+
+		$anti_spoofing_cookie = $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 8);
+
+		$this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 4);
+
+		$temp = unpack('nlen', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 2));
+		$server_key_public_exponent = new Math_BigInteger($this->_string_shift($response[NET_SSH1_RESPONSE_DATA], ceil($temp['len'] / 8)), 256);
+		$this->server_key_public_exponent = $server_key_public_exponent;
+
+		$temp = unpack('nlen', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 2));
+		$server_key_public_modulus = new Math_BigInteger($this->_string_shift($response[NET_SSH1_RESPONSE_DATA], ceil($temp['len'] / 8)), 256);
+		$this->server_key_public_modulus = $server_key_public_modulus;
+
+		$this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 4);
+
+		$temp = unpack('nlen', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 2));
+		$host_key_public_exponent = new Math_BigInteger($this->_string_shift($response[NET_SSH1_RESPONSE_DATA], ceil($temp['len'] / 8)), 256);
+		$this->host_key_public_exponent = $host_key_public_exponent;
+
+		$temp = unpack('nlen', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 2));
+		$host_key_public_modulus = new Math_BigInteger($this->_string_shift($response[NET_SSH1_RESPONSE_DATA], ceil($temp['len'] / 8)), 256);
+		$this->host_key_public_modulus = $host_key_public_modulus;
+
+		$this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 4);
+
+		// get a list of the supported ciphers
+		extract(unpack('Nsupported_ciphers_mask', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 4)));
+		foreach ($this->supported_ciphers as $mask=>$name) {
+			if (($supported_ciphers_mask & (1 << $mask)) == 0) {
+				unset($this->supported_ciphers[$mask]);
+			}
+		}
+
+		// get a list of the supported authentications
+		extract(unpack('Nsupported_authentications_mask', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 4)));
+		foreach ($this->supported_authentications as $mask=>$name) {
+			if (($supported_authentications_mask & (1 << $mask)) == 0) {
+				unset($this->supported_authentications[$mask]);
+			}
+		}
+
+		$session_id = pack('H*', md5($host_key_public_modulus->toBytes() . $server_key_public_modulus->toBytes() . $anti_spoofing_cookie));
+
+		$session_key = '';
+		for ($i = 0; $i < 32; $i++) {
+			$session_key.= chr(crypt_random(0, 255));
+		}
+		$double_encrypted_session_key = $session_key ^ str_pad($session_id, 32, chr(0));
+
+		if ($server_key_public_modulus->compare($host_key_public_modulus) < 0) {
+			$double_encrypted_session_key = $this->_rsa_crypt(
+				$double_encrypted_session_key,
+				array(
+					$server_key_public_exponent,
+					$server_key_public_modulus
+				)
+			);
+			$double_encrypted_session_key = $this->_rsa_crypt(
+				$double_encrypted_session_key,
+				array(
+					$host_key_public_exponent,
+					$host_key_public_modulus
+				)
+			);
+		} else {
+			$double_encrypted_session_key = $this->_rsa_crypt(
+				$double_encrypted_session_key,
+				array(
+					$host_key_public_exponent,
+					$host_key_public_modulus
+				)
+			);
+			$double_encrypted_session_key = $this->_rsa_crypt(
+				$double_encrypted_session_key,
+				array(
+					$server_key_public_exponent,
+					$server_key_public_modulus
+				)
+			);
+		}
+
+		$cipher = isset($this->supported_ciphers[$cipher]) ? $cipher : NET_SSH1_CIPHER_3DES;
+		$data = pack('C2a*na*N', NET_SSH1_CMSG_SESSION_KEY, $cipher, $anti_spoofing_cookie, 8 * strlen($double_encrypted_session_key), $double_encrypted_session_key, 0);
+
+		if (!$this->_send_binary_packet($data)) {
+			user_error('Error sending SSH_CMSG_SESSION_KEY', E_USER_NOTICE);
+			return;
+		}
+
+		switch ($cipher) {
+			//case NET_SSH1_CIPHER_NONE:
+			//    $this->crypto = new Crypt_Null();
+			//    break;
+			case NET_SSH1_CIPHER_DES:
+				$this->crypto = new Crypt_DES();
+				$this->crypto->disablePadding();
+				$this->crypto->enableContinuousBuffer();
+				$this->crypto->setKey(substr($session_key, 0,  8));
+				break;
+			case NET_SSH1_CIPHER_3DES:
+				$this->crypto = new Crypt_TripleDES(CRYPT_DES_MODE_3CBC);
+				$this->crypto->disablePadding();
+				$this->crypto->enableContinuousBuffer();
+				$this->crypto->setKey(substr($session_key, 0, 24));
+				break;
+			//case NET_SSH1_CIPHER_RC4:
+			//    $this->crypto = new Crypt_RC4();
+			//    $this->crypto->enableContinuousBuffer();
+			//    $this->crypto->setKey(substr($session_key, 0,  16));
+			//    break;
+		}
+
+		$response = $this->_get_binary_packet();
+
+		if ($response[NET_SSH1_RESPONSE_TYPE] != NET_SSH1_SMSG_SUCCESS) {
+			user_error('Expected SSH_SMSG_SUCCESS', E_USER_NOTICE);
+			return;
+		}
+
+		$this->bitmap = NET_SSH1_MASK_CONSTRUCTOR;
+	}
+
+    public function Net_SSH1($host, $port = 22, $timeout = 10, $cipher = NET_SSH1_CIPHER_3DES)
     {
-        $this->fsock = @fsockopen($host, $port, $errno, $errstr, $timeout);
-        if (!$this->fsock) {
-            user_error(rtrim("Cannot connect to $host. Error $errno. $errstr"), E_USER_NOTICE);
-            return;
-        }
-
-        $this->server_identification = $init_line = fgets($this->fsock, 255);
-        if (!preg_match('#SSH-([0-9\.]+)-(.+)#', $init_line, $parts)) {
-            user_error('Can only connect to SSH servers', E_USER_NOTICE);
-            return;
-        }
-        if ($parts[1][0] != 1) {
-            user_error("Cannot connect to SSH $parts[1] servers", E_USER_NOTICE);
-            return;
-        }
-
-        fputs($this->fsock, $this->identifier."\r\n");
-
-        $response = $this->_get_binary_packet();
-        if ($response[NET_SSH1_RESPONSE_TYPE] != NET_SSH1_SMSG_PUBLIC_KEY) {
-            user_error('Expected SSH_SMSG_PUBLIC_KEY', E_USER_NOTICE);
-            return;
-        }
-
-        $anti_spoofing_cookie = $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 8);
-
-        $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 4);
-
-        $temp = unpack('nlen', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 2));
-        $server_key_public_exponent = new Math_BigInteger($this->_string_shift($response[NET_SSH1_RESPONSE_DATA], ceil($temp['len'] / 8)), 256);
-        $this->server_key_public_exponent = $server_key_public_exponent;
-
-        $temp = unpack('nlen', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 2));
-        $server_key_public_modulus = new Math_BigInteger($this->_string_shift($response[NET_SSH1_RESPONSE_DATA], ceil($temp['len'] / 8)), 256);
-        $this->server_key_public_modulus = $server_key_public_modulus;
-
-        $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 4);
-
-        $temp = unpack('nlen', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 2));
-        $host_key_public_exponent = new Math_BigInteger($this->_string_shift($response[NET_SSH1_RESPONSE_DATA], ceil($temp['len'] / 8)), 256);
-        $this->host_key_public_exponent = $host_key_public_exponent;
-
-        $temp = unpack('nlen', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 2));
-        $host_key_public_modulus = new Math_BigInteger($this->_string_shift($response[NET_SSH1_RESPONSE_DATA], ceil($temp['len'] / 8)), 256);
-        $this->host_key_public_modulus = $host_key_public_modulus;
-
-        $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 4);
-
-        // get a list of the supported ciphers
-        extract(unpack('Nsupported_ciphers_mask', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 4)));
-        foreach ($this->supported_ciphers as $mask=>$name) {
-            if (($supported_ciphers_mask & (1 << $mask)) == 0) {
-                unset($this->supported_ciphers[$mask]);
-            }
-        }
-
-        // get a list of the supported authentications
-        extract(unpack('Nsupported_authentications_mask', $this->_string_shift($response[NET_SSH1_RESPONSE_DATA], 4)));
-        foreach ($this->supported_authentications as $mask=>$name) {
-            if (($supported_authentications_mask & (1 << $mask)) == 0) {
-                unset($this->supported_authentications[$mask]);
-            }
-        }
-
-        $session_id = pack('H*', md5($host_key_public_modulus->toBytes() . $server_key_public_modulus->toBytes() . $anti_spoofing_cookie));
-
-        $session_key = '';
-        for ($i = 0; $i < 32; $i++) {
-            $session_key.= chr(crypt_random(0, 255));
-        }
-        $double_encrypted_session_key = $session_key ^ str_pad($session_id, 32, chr(0));
-
-        if ($server_key_public_modulus->compare($host_key_public_modulus) < 0) {
-            $double_encrypted_session_key = $this->_rsa_crypt(
-                $double_encrypted_session_key,
-                array(
-                    $server_key_public_exponent,
-                    $server_key_public_modulus
-                )
-            );
-            $double_encrypted_session_key = $this->_rsa_crypt(
-                $double_encrypted_session_key,
-                array(
-                    $host_key_public_exponent,
-                    $host_key_public_modulus
-                )
-            );
-        } else {
-            $double_encrypted_session_key = $this->_rsa_crypt(
-                $double_encrypted_session_key,
-                array(
-                    $host_key_public_exponent,
-                    $host_key_public_modulus
-                )
-            );
-            $double_encrypted_session_key = $this->_rsa_crypt(
-                $double_encrypted_session_key,
-                array(
-                    $server_key_public_exponent,
-                    $server_key_public_modulus
-                )
-            );
-        }
-
-        $cipher = isset($this->supported_ciphers[$cipher]) ? $cipher : NET_SSH1_CIPHER_3DES;
-        $data = pack('C2a*na*N', NET_SSH1_CMSG_SESSION_KEY, $cipher, $anti_spoofing_cookie, 8 * strlen($double_encrypted_session_key), $double_encrypted_session_key, 0);
-
-        if (!$this->_send_binary_packet($data)) {
-            user_error('Error sending SSH_CMSG_SESSION_KEY', E_USER_NOTICE);
-            return;
-        }
-
-        switch ($cipher) {
-            //case NET_SSH1_CIPHER_NONE:
-            //    $this->crypto = new Crypt_Null();
-            //    break;
-            case NET_SSH1_CIPHER_DES:
-                $this->crypto = new Crypt_DES();
-                $this->crypto->disablePadding();
-                $this->crypto->enableContinuousBuffer();
-                $this->crypto->setKey(substr($session_key, 0,  8));
-                break;
-            case NET_SSH1_CIPHER_3DES:
-                $this->crypto = new Crypt_TripleDES(CRYPT_DES_MODE_3CBC);
-                $this->crypto->disablePadding();
-                $this->crypto->enableContinuousBuffer();
-                $this->crypto->setKey(substr($session_key, 0, 24));
-                break;
-            //case NET_SSH1_CIPHER_RC4:
-            //    $this->crypto = new Crypt_RC4();
-            //    $this->crypto->enableContinuousBuffer();
-            //    $this->crypto->setKey(substr($session_key, 0,  16));
-            //    break;
-        }
-
-        $response = $this->_get_binary_packet();
-
-        if ($response[NET_SSH1_RESPONSE_TYPE] != NET_SSH1_SMSG_SUCCESS) {
-            user_error('Expected SSH_SMSG_SUCCESS', E_USER_NOTICE);
-            return;
-        }
-
-        $this->bitmap = NET_SSH1_MASK_CONSTRUCTOR;
+		self::__construct($host, $port, $timeout, $cipher);
     }
 
     /**

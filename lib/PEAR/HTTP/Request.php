@@ -309,57 +309,62 @@ class HTTP_Request
     * </ul>
     * @access public
     */
-    function HTTP_Request($url = '', $params = array())
+	public function __construct($url = '', $params = array())
+	{
+		$this->_method         =  HTTP_REQUEST_METHOD_GET;
+		$this->_http           =  HTTP_REQUEST_HTTP_VER_1_1;
+		$this->_requestHeaders = array();
+		$this->_postData       = array();
+		$this->_body           = null;
+
+		$this->_user = null;
+		$this->_pass = null;
+
+		$this->_proxy_host = null;
+		$this->_proxy_port = null;
+		$this->_proxy_user = null;
+		$this->_proxy_pass = null;
+
+		$this->_allowRedirects = false;
+		$this->_maxRedirects   = 3;
+		$this->_redirects      = 0;
+
+		$this->_timeout  = null;
+		$this->_response = null;
+
+		foreach ($params as $key => $value) {
+			$this->{'_' . $key} = $value;
+		}
+
+		if (!empty($url)) {
+			$this->setURL($url);
+		}
+
+		// Default useragent
+		$this->addHeader('User-Agent', 'PEAR HTTP_Request class ( http://pear.php.net/ )');
+
+		// We don't do keep-alives by default
+		$this->addHeader('Connection', 'close');
+
+		// Basic authentication
+		if (!empty($this->_user)) {
+			$this->addHeader('Authorization', 'Basic ' . base64_encode($this->_user . ':' . $this->_pass));
+		}
+
+		// Proxy authentication (see bug #5913)
+		if (!empty($this->_proxy_user)) {
+			$this->addHeader('Proxy-Authorization', 'Basic ' . base64_encode($this->_proxy_user . ':' . $this->_proxy_pass));
+		}
+
+		// Use gzip encoding if possible
+		if (HTTP_REQUEST_HTTP_VER_1_1 == $this->_http && extension_loaded('zlib')) {
+			$this->addHeader('Accept-Encoding', 'gzip');
+		}
+	}
+
+    public function HTTP_Request($url = '', $params = array())
     {
-        $this->_method         =  HTTP_REQUEST_METHOD_GET;
-        $this->_http           =  HTTP_REQUEST_HTTP_VER_1_1;
-        $this->_requestHeaders = array();
-        $this->_postData       = array();
-        $this->_body           = null;
-
-        $this->_user = null;
-        $this->_pass = null;
-
-        $this->_proxy_host = null;
-        $this->_proxy_port = null;
-        $this->_proxy_user = null;
-        $this->_proxy_pass = null;
-
-        $this->_allowRedirects = false;
-        $this->_maxRedirects   = 3;
-        $this->_redirects      = 0;
-
-        $this->_timeout  = null;
-        $this->_response = null;
-
-        foreach ($params as $key => $value) {
-            $this->{'_' . $key} = $value;
-        }
-
-        if (!empty($url)) {
-            $this->setURL($url);
-        }
-
-        // Default useragent
-        $this->addHeader('User-Agent', 'PEAR HTTP_Request class ( http://pear.php.net/ )');
-
-        // We don't do keep-alives by default
-        $this->addHeader('Connection', 'close');
-
-        // Basic authentication
-        if (!empty($this->_user)) {
-            $this->addHeader('Authorization', 'Basic ' . base64_encode($this->_user . ':' . $this->_pass));
-        }
-
-        // Proxy authentication (see bug #5913)
-        if (!empty($this->_proxy_user)) {
-            $this->addHeader('Proxy-Authorization', 'Basic ' . base64_encode($this->_proxy_user . ':' . $this->_proxy_pass));
-        }
-
-        // Use gzip encoding if possible
-        if (HTTP_REQUEST_HTTP_VER_1_1 == $this->_http && extension_loaded('zlib')) {
-            $this->addHeader('Accept-Encoding', 'gzip');
-        }
+		self::__construct($url, $params);
     }
 
     /**
@@ -1195,10 +1200,15 @@ class HTTP_Response
     * @param  Net_Socket    socket to read the response from
     * @param  array         listeners attached to request
     */
-    function HTTP_Response(&$sock, &$listeners)
+	public function __construct(&$sock, &$listeners)
+	{
+		$this->_sock      =& $sock;
+		$this->_listeners =& $listeners;
+	}
+
+    public function HTTP_Response(&$sock, &$listeners)
     {
-        $this->_sock      =& $sock;
-        $this->_listeners =& $listeners;
+		self::__construct(&$sock, &$listeners);
     }
 
 

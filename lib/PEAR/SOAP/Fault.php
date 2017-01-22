@@ -57,14 +57,21 @@ class SOAP_Fault extends PEAR_Error
      * @param array $mode          @see PEAR_Error
      * @param array $options       @see PEAR_Error
      */
-    function SOAP_Fault($faultstring = 'unknown error', $faultcode = 'Client',
+	public function __construct($faultstring = 'unknown error', $faultcode = 'Client',
+								$faultactor = null, $detail = null, $mode = null,
+								$options = null)
+	{
+		parent::PEAR_Error($faultstring, $faultcode, $mode, $options, $detail);
+		if ($faultactor) {
+			$this->error_message_prefix = $faultactor;
+		}
+	}
+
+    public function SOAP_Fault($faultstring = 'unknown error', $faultcode = 'Client',
                         $faultactor = null, $detail = null, $mode = null,
                         $options = null)
     {
-        parent::PEAR_Error($faultstring, $faultcode, $mode, $options, $detail);
-        if ($faultactor) {
-            $this->error_message_prefix = $faultactor;
-        }
+		self::__construct($faultstring, $faultcode, $faultactor, $detail, $mode, $options);
     }
 
     /**

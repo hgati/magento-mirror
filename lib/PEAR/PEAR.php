@@ -167,29 +167,34 @@ class PEAR
      * @access public
      * @return void
      */
-    function PEAR($error_class = null)
+	public function __construct($error_class = null)
+	{
+		$classname = strtolower(get_class($this));
+		if ($this->_debug) {
+			print "PEAR constructor called, class=$classname\n";
+		}
+		if ($error_class !== null) {
+			$this->_error_class = $error_class;
+		}
+		while ($classname && strcasecmp($classname, "pear")) {
+			$destructor = "_$classname";
+			if (method_exists($this, $destructor)) {
+				global $_PEAR_destructor_object_list;
+				$_PEAR_destructor_object_list[] = &$this;
+				if (!isset($GLOBALS['_PEAR_SHUTDOWN_REGISTERED'])) {
+					register_shutdown_function("_PEAR_call_destructors");
+					$GLOBALS['_PEAR_SHUTDOWN_REGISTERED'] = true;
+				}
+				break;
+			} else {
+				$classname = get_parent_class($classname);
+			}
+		}
+	}
+
+    public function PEAR($error_class = null)
     {
-        $classname = strtolower(get_class($this));
-        if ($this->_debug) {
-            print "PEAR constructor called, class=$classname\n";
-        }
-        if ($error_class !== null) {
-            $this->_error_class = $error_class;
-        }
-        while ($classname && strcasecmp($classname, "pear")) {
-            $destructor = "_$classname";
-            if (method_exists($this, $destructor)) {
-                global $_PEAR_destructor_object_list;
-                $_PEAR_destructor_object_list[] = &$this;
-                if (!isset($GLOBALS['_PEAR_SHUTDOWN_REGISTERED'])) {
-                    register_shutdown_function("_PEAR_call_destructors");
-                    $GLOBALS['_PEAR_SHUTDOWN_REGISTERED'] = true;
-                }
-                break;
-            } else {
-                $classname = get_parent_class($classname);
-            }
-        }
+		self::__construct($error_class);
     }
 
     // }}}
@@ -858,64 +863,70 @@ class PEAR_Error
      * @access public
      *
      */
-    function PEAR_Error($message = 'unknown error', $code = null,
+	public function __construct($message = 'unknown error', $code = null,
+								$mode = null, $options = null, $userinfo = null)
+	{
+		if ($mode === null) {
+			$mode = PEAR_ERROR_RETURN;
+		}
+		$this->message   = $message;
+		$this->code      = $code;
+		$this->mode      = $mode;
+		$this->userinfo  = $userinfo;
+		if (!PEAR::getStaticProperty('PEAR_Error', 'skiptrace')) {
+			$this->backtrace = debug_backtrace();
+			if (isset($this->backtrace[0]) && isset($this->backtrace[0]['object'])) {
+				unset($this->backtrace[0]['object']);
+			}
+		}
+		if ($mode & PEAR_ERROR_CALLBACK) {
+			$this->level = E_USER_NOTICE;
+			$this->callback = $options;
+		} else {
+			if ($options === null) {
+				$options = E_USER_NOTICE;
+			}
+			$this->level = $options;
+			$this->callback = null;
+		}
+		if ($this->mode & PEAR_ERROR_PRINT) {
+			if (is_null($options) || is_int($options)) {
+				$format = "%s";
+			} else {
+				$format = $options;
+			}
+			printf($format, $this->getMessage());
+		}
+		if ($this->mode & PEAR_ERROR_TRIGGER) {
+			trigger_error($this->getMessage(), $this->level);
+		}
+		if ($this->mode & PEAR_ERROR_DIE) {
+			$msg = $this->getMessage();
+			if (is_null($options) || is_int($options)) {
+				$format = "%s";
+				if (substr($msg, -1) != "\n") {
+					$msg .= "\n";
+				}
+			} else {
+				$format = $options;
+			}
+			die(sprintf($format, $msg));
+		}
+		if ($this->mode & PEAR_ERROR_CALLBACK) {
+			if (is_callable($this->callback)) {
+				call_user_func($this->callback, $this);
+			}
+		}
+		if ($this->mode & PEAR_ERROR_EXCEPTION) {
+			trigger_error("PEAR_ERROR_EXCEPTION is obsolete, use class PEAR_Exception for exceptions", E_USER_WARNING);
+			eval('$e = new Exception($this->message, $this->code);throw($e);');
+		}
+	}
+
+    public function PEAR_Error($message = 'unknown error', $code = null,
                         $mode = null, $options = null, $userinfo = null)
     {
-        if ($mode === null) {
-            $mode = PEAR_ERROR_RETURN;
-        }
-        $this->message   = $message;
-        $this->code      = $code;
-        $this->mode      = $mode;
-        $this->userinfo  = $userinfo;
-        if (!PEAR::getStaticProperty('PEAR_Error', 'skiptrace')) {
-            $this->backtrace = debug_backtrace();
-            if (isset($this->backtrace[0]) && isset($this->backtrace[0]['object'])) {
-                unset($this->backtrace[0]['object']);
-            }
-        }
-        if ($mode & PEAR_ERROR_CALLBACK) {
-            $this->level = E_USER_NOTICE;
-            $this->callback = $options;
-        } else {
-            if ($options === null) {
-                $options = E_USER_NOTICE;
-            }
-            $this->level = $options;
-            $this->callback = null;
-        }
-        if ($this->mode & PEAR_ERROR_PRINT) {
-            if (is_null($options) || is_int($options)) {
-                $format = "%s";
-            } else {
-                $format = $options;
-            }
-            printf($format, $this->getMessage());
-        }
-        if ($this->mode & PEAR_ERROR_TRIGGER) {
-            trigger_error($this->getMessage(), $this->level);
-        }
-        if ($this->mode & PEAR_ERROR_DIE) {
-            $msg = $this->getMessage();
-            if (is_null($options) || is_int($options)) {
-                $format = "%s";
-                if (substr($msg, -1) != "\n") {
-                    $msg .= "\n";
-                }
-            } else {
-                $format = $options;
-            }
-            die(sprintf($format, $msg));
-        }
-        if ($this->mode & PEAR_ERROR_CALLBACK) {
-            if (is_callable($this->callback)) {
-                call_user_func($this->callback, $this);
-            }
-        }
-        if ($this->mode & PEAR_ERROR_EXCEPTION) {
-            trigger_error("PEAR_ERROR_EXCEPTION is obsolete, use class PEAR_Exception for exceptions", E_USER_WARNING);
-            eval('$e = new Exception($this->message, $this->code);throw($e);');
-        }
+		self::__construct($message, $code, $mode, $options, $userinfo);
     }
 
     // }}}

@@ -134,6 +134,7 @@ class Crypt_Hash {
      */
     var $ipad;
 
+
     /**
      * Default Constructor.
      *
@@ -141,22 +142,27 @@ class Crypt_Hash {
      * @return Crypt_Hash
      * @access public
      */
-    function Crypt_Hash($hash = 'sha1')
-    {
-        if ( !defined('CRYPT_HASH_MODE') ) {
-            switch (true) {
-                case extension_loaded('hash'):
-                    define('CRYPT_HASH_MODE', CRYPT_HASH_MODE_HASH);
-                    break;
-                case extension_loaded('mhash'):
-                    define('CRYPT_HASH_MODE', CRYPT_HASH_MODE_MHASH);
-                    break;
-                default:
-                    define('CRYPT_HASH_MODE', CRYPT_HASH_MODE_INTERNAL);
-            }
-        }
+	public function __construct($hash = 'sha1')
+	{
+		if ( !defined('CRYPT_HASH_MODE') ) {
+			switch (true) {
+				case extension_loaded('hash'):
+					define('CRYPT_HASH_MODE', CRYPT_HASH_MODE_HASH);
+					break;
+				case extension_loaded('mhash'):
+					define('CRYPT_HASH_MODE', CRYPT_HASH_MODE_MHASH);
+					break;
+				default:
+					define('CRYPT_HASH_MODE', CRYPT_HASH_MODE_INTERNAL);
+			}
+		}
 
-        $this->setHash($hash);
+		$this->setHash($hash);
+	}
+
+    public function Crypt_Hash($hash = 'sha1')
+    {
+		self::__construct($hash);
     }
 
     /**

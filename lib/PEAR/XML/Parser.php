@@ -417,7 +417,7 @@ class XML_Parser extends PEAR
         /**
          * check, if file is a remote file
          */
-        if (eregi('^(http|ftp)://', substr($file, 0, 10))) {
+        if (preg_match('/^(http|ftp):\/\//i', substr($file, 0, 10))) {
             if (!ini_get('allow_url_fopen')) {
                 return $this->
                 raiseError('Remote files cannot be parsed, as safe mode is enabled.',
@@ -474,7 +474,7 @@ class XML_Parser extends PEAR
         if (is_resource($fp)) {
             $this->fp = $fp;
             return true;
-        } elseif (eregi('^[a-z]+://', substr($fp, 0, 10))) {
+        } elseif (preg_match('/^[a-z]+:\/\//i', substr($fp, 0, 10))) {
             // see if it's an absolute URL (has a scheme at the beginning)
             return $this->setInputFile($fp);
         } elseif (file_exists($fp)) {
@@ -752,16 +752,21 @@ class XML_Parser_Error extends PEAR_Error
     * @access   public
     * @todo PEAR CS - can't meet 85char line limit without arg refactoring
     */
-    function XML_Parser_Error($msgorparser = 'unknown error', $code = 0, $mode = PEAR_ERROR_RETURN, $level = E_USER_NOTICE)
+	public function __construct($msgorparser = 'unknown error', $code = 0, $mode = PEAR_ERROR_RETURN, $level = E_USER_NOTICE)
+	{
+		if (is_resource($msgorparser)) {
+			$code        = xml_get_error_code($msgorparser);
+			$msgorparser = sprintf('%s at XML input line %d:%d',
+				xml_error_string($code),
+				xml_get_current_line_number($msgorparser),
+				xml_get_current_column_number($msgorparser));
+		}
+		$this->PEAR_Error($msgorparser, $code, $mode, $level);
+	}
+
+    public function XML_Parser_Error($msgorparser = 'unknown error', $code = 0, $mode = PEAR_ERROR_RETURN, $level = E_USER_NOTICE)
     {
-        if (is_resource($msgorparser)) {
-            $code        = xml_get_error_code($msgorparser);
-            $msgorparser = sprintf('%s at XML input line %d:%d',
-                xml_error_string($code),
-                xml_get_current_line_number($msgorparser),
-                xml_get_current_column_number($msgorparser));
-        }
-        $this->PEAR_Error($msgorparser, $code, $mode, $level);
+		self::__construct($msgorparser, $code, $mode, $level);
     }
     // }}}
 }

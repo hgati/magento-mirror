@@ -94,10 +94,15 @@ class SOAP_Base_Object extends PEAR
      *
      * @param string $faultcode  Error code.
      */
-    function SOAP_Base_Object($faultcode = 'Client')
+	public function __construct($faultcode = 'Client')
+	{
+		$this->_myfaultcode = $faultcode;
+		parent::PEAR('SOAP_Fault');
+	}
+
+    public function SOAP_Base_Object($faultcode = 'Client')
     {
-        $this->_myfaultcode = $faultcode;
-        parent::PEAR('SOAP_Fault');
+		self::__construct($faultcode);
     }
 
     /**
@@ -280,10 +285,15 @@ class SOAP_Base extends SOAP_Base_Object
      *
      * @param string $faultcode  Error code.
      */
-    function SOAP_Base($faultcode = 'Client')
+	public function __construct($faultcode = 'Client')
+	{
+		parent::SOAP_Base_Object($faultcode);
+		$this->_resetNamespaces();
+	}
+
+    public function SOAP_Base($faultcode = 'Client')
     {
-        parent::SOAP_Base_Object($faultcode);
-        $this->_resetNamespaces();
+		self::__construct($faultcode);
     }
 
     /**
@@ -1101,32 +1111,37 @@ class QName
     var $ns = '';
     var $namespace = '';
 
-    function QName($name, $namespace = '')
-    {
-        if ($name && $name[0] == '{') {
-            preg_match('/\{(.*?)\}(.*)/', $name, $m);
-            $this->name = $m[2];
-            $this->namespace = $m[1];
-        } elseif (substr_count($name, ':') == 1) {
-            $s = explode(':', $name);
-            $s = array_reverse($s);
-            $this->name = $s[0];
-            $this->ns = $s[1];
-            $this->namespace = $namespace;
-        } else {
-            $this->name = $name;
-            $this->namespace = $namespace;
-        }
+	public function __construct($name, $namespace = '')
+	{
+		if ($name && $name[0] == '{') {
+			preg_match('/\{(.*?)\}(.*)/', $name, $m);
+			$this->name = $m[2];
+			$this->namespace = $m[1];
+		} elseif (substr_count($name, ':') == 1) {
+			$s = explode(':', $name);
+			$s = array_reverse($s);
+			$this->name = $s[0];
+			$this->ns = $s[1];
+			$this->namespace = $namespace;
+		} else {
+			$this->name = $name;
+			$this->namespace = $namespace;
+		}
 
-        // A little more magic than should be in a qname.
-        $p = strpos($this->name, '[');
-        if ($p) {
-            // TODO: Need to re-examine this logic later.
-            // Chop off [].
-            $this->arraySize = explode(',', substr($this->name, $p + 1, -$p - 2));
-            $this->arrayInfo = substr($this->name, $p);
-            $this->name = substr($this->name, 0, $p);
-        }
+		// A little more magic than should be in a qname.
+		$p = strpos($this->name, '[');
+		if ($p) {
+			// TODO: Need to re-examine this logic later.
+			// Chop off [].
+			$this->arraySize = explode(',', substr($this->name, $p + 1, -$p - 2));
+			$this->arrayInfo = substr($this->name, $p);
+			$this->name = substr($this->name, 0, $p);
+		}
+	}
+
+    public function QName($name, $namespace = '')
+    {
+		self::__construct($name, $namespace);
     }
 
     function fqn()

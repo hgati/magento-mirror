@@ -67,9 +67,14 @@ class HTTP_Request_Listener
     *
     * @access public
     */
-    function HTTP_Request_Listener()
+	public function __construct()
+	{
+		$this->_id = md5(uniqid('http_request_', 1));
+	}
+
+    public function HTTP_Request_Listener()
     {
-        $this->_id = md5(uniqid('http_request_', 1));
+		self::__construct();
     }
 
 
