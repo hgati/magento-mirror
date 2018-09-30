@@ -1,0 +1,5 @@
+{
+  "name": "hgati/magento-mirror",
+  "description": "Magento Mirror - magento 1.7.0.2 compatible with php7.0",
+  "type": "magento-core"
+}
